@@ -544,6 +544,8 @@ creators.forEach(c=>{
 
 // ====== FEED ======
 const feedBox=document.getElementById('feedBox');
+let currentFeedFilter='all';
+let liveContent=null;
 function renderFeed(filter){
   currentFeedFilter=filter;
   // Use live API data if available, otherwise fall back to static
@@ -713,8 +715,6 @@ const weeklyHistory = {
 // ====== REFRESH DATA ======
 // API endpoint — replace with your Vercel deployment URL after deploying
 const API_URL='https://ab-tracker-api.vercel.app/api/refresh';
-let currentFeedFilter='all';
-let liveContent=null; // stores API-fetched content, null = use static latestContent
 
 function refreshData(btn){
   // Only the feed page button triggers a real API call
