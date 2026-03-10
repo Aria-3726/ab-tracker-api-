@@ -404,22 +404,22 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
     <div style="display:grid;grid-template-columns:1fr;gap:20px;margin-top:20px">
       <div class="card" style="padding:20px">
         <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">YouTube 订阅趋势</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">过去26周YT订阅量变化（每周五结算）</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">YT订阅趋势（历史周数据 + 每日更新）</div>
         <div class="detail-chart" id="detailYtChart"></div>
       </div>
       <div class="card" style="padding:20px">
         <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">TikTok 粉丝趋势</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">过去26周TT粉丝量变化（每周五结算）</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">TT粉丝趋势（历史周数据 + 每日更新）</div>
         <div class="detail-chart" id="detailTtChart"></div>
       </div>
       <div class="card" style="padding:20px">
         <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">YouTube & TikTok 播放量趋势</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">过去26周分平台周播放量估算（红色=YouTube，青色=TikTok）</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">分平台周播放量估算（红色=YouTube，青色=TikTok）</div>
         <div class="detail-chart" id="detailViewsChart"></div>
       </div>
       <div class="card" style="padding:20px">
         <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">CPM 效率趋势</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">过去26周CPM变化（月费/月播放×1000）</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">CPM变化趋势（月费/月播放×1000）</div>
         <div class="detail-chart" id="detailCpmChart"></div>
       </div>
     </div>
@@ -837,6 +837,17 @@ const weeklyHistory = {
 const API_URL='https://ab-tracker-api.vercel.app/api/refresh';
 const API_CREATORS='/api/creators';
 const API_HISTORY='/api/history';
+const API_DAILY_HISTORY='/api/daily-history';
+
+// Merge weekly history + daily history into a combined timeline
+function mergeHistory(weekly, daily){
+  if(!daily||!daily.length) return weekly||[];
+  if(!weekly||!weekly.length) return daily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:null,ytv:null,ttv:null,cpm:null}));
+  const lastWeeklyDate=weekly[weekly.length-1].d;
+  const newDaily=daily.filter(d=>d.d>lastWeeklyDate);
+  const converted=newDaily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:null,ytv:null,ttv:null,cpm:null}));
+  return [...weekly,...converted];
+}
 
 function refreshData(btn){
   const page=btn.closest('.page');
@@ -1000,20 +1011,28 @@ function showCreatorDetail(name){
   const rc=RC[c.region]||'#c8a44e';
   const st=statusMap[c.sentiment]||statusMap.neutral;
 
-  // Try to fetch live history data
-  fetch(API_HISTORY+'?creator='+encodeURIComponent(name))
-    .then(r=>{if(!r.ok)throw new Error('API returned '+r.status);return r.json()})
-    .then(json=>{
-      if(json.success&&json.data&&json.data.length){
-        hist=json.data;
-        weeklyHistory[name]=hist;
-        // Re-render detail charts with fresh data
-        detailCharts.forEach(ch=>{try{ch.dispose()}catch(e){}});
-        detailCharts=[];
-        renderDetailChartsInner(hist,c);
-      }
-    })
-    .catch(()=>{/* silently fall back to static data */});
+  // Try to fetch live weekly + daily history data and merge
+  let dailyData=null;
+  Promise.all([
+    fetch(API_HISTORY+'?creator='+encodeURIComponent(name)).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(API_DAILY_HISTORY+'?creator='+encodeURIComponent(name)).then(r=>r.ok?r.json():null).catch(()=>null)
+  ]).then(([weeklyJson,dailyJson])=>{
+    let weeklyData=hist;
+    if(weeklyJson&&weeklyJson.success&&weeklyJson.data&&weeklyJson.data.length){
+      weeklyData=weeklyJson.data;
+    }
+    if(dailyJson&&dailyJson.success&&dailyJson.data){
+      dailyData=dailyJson.data;
+    }
+    const merged=mergeHistory(weeklyData,dailyData);
+    if(merged.length>hist.length){
+      hist=merged;
+      weeklyHistory[name]=weeklyData;
+      detailCharts.forEach(ch=>{try{ch.dispose()}catch(e){}});
+      detailCharts=[];
+      renderDetailChartsInner(hist,c);
+    }
+  });
 
   // Header
   const dc=document.getElementById('detailContent');
@@ -1137,40 +1156,62 @@ function renderDetailChartsInner(hist,c){
       el2.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">该主播暂无TikTok数据</div>';
     }
 
-    // Views (YouTube + TikTok split)
+    // Views (YouTube + TikTok split) — only show entries with view data
     const el3=document.getElementById('detailViewsChart');
     if(el3){
-      const ch3=echarts.init(el3,null,{renderer:'svg'});
-      const hasTTViews=hist.some(h=>h.ttv!==null&&h.ttv!==undefined);
-      const viewsSeries=[{type:'line',name:'YouTube',data:hist.map(h=>h.ytv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#ff5050'},itemStyle:{color:'#ff5050'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(255,80,80,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}}];
-      if(hasTTViews){viewsSeries.push({type:'line',name:'TikTok',data:hist.map(h=>h.ttv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#4db8d4'},itemStyle:{color:'#4db8d4'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(77,184,212,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}});}
-      ch3.setOption({
-        tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
-          const idx=p[0].dataIndex;const h=hist[idx];
-          let s=`<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:4px">${h.d}</div>`;
-          s+=`<div style="color:#ff5050;margin-bottom:2px">YouTube: <b>${fmt(h.ytv||0)}</b></div>`;
-          if(hasTTViews)s+=`<div style="color:#4db8d4;margin-bottom:2px">TikTok: <b>${fmt(h.ttv||0)}</b></div>`;
-          s+=`<div style="color:rgba(255,255,255,0.5);border-top:1px solid rgba(255,255,255,0.1);padding-top:3px;margin-top:3px">合计: <b>${fmt(h.wv)}</b></div>`;
-          return s;
-        }},
-        legend:{show:hasTTViews,top:0,right:0,textStyle:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.5)'},itemWidth:14,itemHeight:8,data:hasTTViews?[{name:'YouTube',icon:'roundRect'},{name:'TikTok',icon:'roundRect'}]:[{name:'YouTube',icon:'roundRect'}]},
-        grid:{left:60,right:20,top:hasTTViews?30:20,bottom:30},
-        xAxis:{type:'category',data:dates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
-        yAxis:{type:'value',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>fmt(v)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
-        series:viewsSeries,
-        animationDuration:800
-      });
-      detailCharts.push(ch3);
-      window.addEventListener('resize',()=>ch3.resize());
+      const viewsHist=hist.filter(h=>h.wv!==null&&h.wv!==undefined);
+      if(viewsHist.length){
+        const viewsDates=viewsHist.map(h=>h.d.slice(5));
+        const ch3=echarts.init(el3,null,{renderer:'svg'});
+        const hasTTViews=viewsHist.some(h=>h.ttv!==null&&h.ttv!==undefined);
+        const viewsSeries=[{type:'line',name:'YouTube',data:viewsHist.map(h=>h.ytv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#ff5050'},itemStyle:{color:'#ff5050'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(255,80,80,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}}];
+        if(hasTTViews){viewsSeries.push({type:'line',name:'TikTok',data:viewsHist.map(h=>h.ttv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#4db8d4'},itemStyle:{color:'#4db8d4'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(77,184,212,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}});}
+        ch3.setOption({
+          tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
+            const idx=p[0].dataIndex;const h=viewsHist[idx];
+            let s=`<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:4px">${h.d}</div>`;
+            s+=`<div style="color:#ff5050;margin-bottom:2px">YouTube: <b>${fmt(h.ytv||0)}</b></div>`;
+            if(hasTTViews)s+=`<div style="color:#4db8d4;margin-bottom:2px">TikTok: <b>${fmt(h.ttv||0)}</b></div>`;
+            s+=`<div style="color:rgba(255,255,255,0.5);border-top:1px solid rgba(255,255,255,0.1);padding-top:3px;margin-top:3px">合计: <b>${fmt(h.wv)}</b></div>`;
+            return s;
+          }},
+          legend:{show:hasTTViews,top:0,right:0,textStyle:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.5)'},itemWidth:14,itemHeight:8,data:hasTTViews?[{name:'YouTube',icon:'roundRect'},{name:'TikTok',icon:'roundRect'}]:[{name:'YouTube',icon:'roundRect'}]},
+          grid:{left:60,right:20,top:hasTTViews?30:20,bottom:30},
+          xAxis:{type:'category',data:viewsDates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
+          yAxis:{type:'value',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>fmt(v)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
+          series:viewsSeries,
+          animationDuration:800
+        });
+        detailCharts.push(ch3);
+        window.addEventListener('resize',()=>ch3.resize());
+      } else {
+        el3.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无播放量数据</div>';
+      }
     }
 
-    // CPM
+    // CPM — only show entries with CPM data
     const el4=document.getElementById('detailCpmChart');
     if(el4){
-      const ch4=echarts.init(el4,null,{renderer:'svg'});
-      ch4.setOption(lineOpt('CPM',hist.map(h=>h.cpm),'#f0a830',v=>'$'+v.toFixed(2)));
-      detailCharts.push(ch4);
-      window.addEventListener('resize',()=>ch4.resize());
+      const cpmHist=hist.filter(h=>h.cpm!==null&&h.cpm!==undefined);
+      if(cpmHist.length){
+        const cpmDates=cpmHist.map(h=>h.d.slice(5));
+        const ch4=echarts.init(el4,null,{renderer:'svg'});
+        ch4.setOption({
+          tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
+            const idx=p[0].dataIndex;const h=cpmHist[idx];
+            return `<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:2px">${h.d}</div><div style="color:#f0a830">CPM: <b>$${h.cpm.toFixed?h.cpm.toFixed(2):h.cpm}</b></div>`;
+          }},
+          grid:{left:60,right:20,top:20,bottom:30},
+          xAxis:{type:'category',data:cpmDates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
+          yAxis:{type:'value',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>'$'+v.toFixed(2)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
+          series:[{type:'line',data:cpmHist.map(h=>h.cpm),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#f0a830'},itemStyle:{color:'#f0a830'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(240,168,48,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}}],
+          animationDuration:800
+        });
+        detailCharts.push(ch4);
+        window.addEventListener('resize',()=>ch4.resize());
+      } else {
+        el4.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无CPM数据</div>';
+      }
     }
   },150);
 }
@@ -1193,6 +1234,5 @@ function goBackFromDetail(){
 }
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v67327c56f0bb4ef8b305cae61679db8f1769101564043" integrity="sha512-rdcWY47ByXd76cbCFzznIcEaCN71jqkWBBqlwhF1SY7KubdLKZiEGeP7AyieKZlGP9hbY/MhGrwXzJC/HulNyg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
