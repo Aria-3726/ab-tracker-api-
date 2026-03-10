@@ -1,0 +1,33 @@
+name: Daily Data Collection
+
+on:
+  schedule:
+    - cron: '0 12 * * *'    # UTC 12:00 every day
+  workflow_dispatch:          # Allow manual trigger from GitHub UI
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run daily collection
+        run: node scripts/collect-daily.js
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/daily-history.json
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "chore: daily snapshot $(date -u +%Y-%m-%d)"
+          git push
