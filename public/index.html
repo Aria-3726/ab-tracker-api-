@@ -164,6 +164,7 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
     <button class="nav-btn" onclick="showPage('feed',this)">内容动态</button>
     <button class="nav-btn" onclick="showPage('creators',this)">主播详情</button>
     <button class="nav-btn" onclick="showPage('insights',this)">核心发现</button>
+    <button class="nav-btn" onclick="showPage('events',this)">活动排期</button>
   </div>
 </nav>
 
@@ -212,7 +213,7 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
           <thead><tr>
             <th>主播</th><th class="text-c">社媒</th><th>区域</th>
             <th class="text-r">YT订阅</th><th class="text-r">YT基准</th><th class="text-r">YT增长</th>
-            <th class="text-r">TT粉丝</th><th class="text-r">TT基准</th>
+            <th class="text-r">TT粉丝</th><th class="text-r">TT基准</th><th class="text-r">TT增长</th>
             <th class="text-r">月播放</th><th class="text-r">月费</th><th class="text-r">CPM</th><th class="text-c">状态</th>
           </tr></thead>
           <tbody id="tBody"></tbody>
@@ -295,6 +296,22 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
       </div>
     </div>
     <div class="sec-desc">签约主播在YouTube和TikTok上发布的最新Arena Breakout相关内容，包含发布日期、播放数、互动数、评论区舆情及跳转链接。点击卡片可直接跳转至视频页面。</div>
+
+    <div id="feedStats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+      <div class="card" style="padding:14px;text-align:center">
+        <div class="stat-num" id="feedStatVideos" style="font-family:Rajdhani;font-size:28px;font-weight:700;color:rgba(255,255,255,0.9)">—</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">今日新增视频</div>
+        <div id="feedStatVideosSub" style="font-family:JetBrains Mono;font-size:9px;color:rgba(255,255,255,0.3);margin-top:2px"></div>
+      </div>
+      <div class="card" style="padding:14px;text-align:center">
+        <div class="stat-num" id="feedStatViews" style="font-family:Rajdhani;font-size:28px;font-weight:700;color:rgba(255,255,255,0.9)">—</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">今日播放量</div>
+      </div>
+      <div class="card" style="padding:14px;text-align:center">
+        <div class="stat-num" id="feedStatCreators" style="font-family:Rajdhani;font-size:28px;font-weight:700;color:rgba(255,255,255,0.9)">—</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">今日发布主播</div>
+      </div>
+    </div>
 
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px" id="feedFilters">
       <button class="filter-btn on" onclick="filterFeed('all',this)">全部</button>
@@ -393,6 +410,40 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
         </ul>
       </div>
     </div>
+
+    <!-- 活动效果复盘 (populated dynamically when events data is loaded) -->
+    <div class="card" style="padding:20px;grid-column:1/-1;display:none" id="eventImpactSection">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div style="width:8px;height:8px;border-radius:50%;background:#c8a44e"></div>
+        <span style="font-family:Rajdhani;font-size:14px;font-weight:700;color:rgba(255,255,255,0.7)">活动效果复盘</span>
+      </div>
+      <div id="eventImpactCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ========== PAGE: EVENTS (活动排期) ========== -->
+<div class="page" id="pg-events">
+  <div class="page-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="sec-hdr"><div class="sec-dot"></div><span class="sec-tag">Event Schedule</span></div>
+        <div class="sec-title">活动排期</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="refresh-btn" onclick="refreshEvents(this)"><svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-1.76-4.24l-2.24 2.24H20V4l-2.35 2.35z"/></svg>刷新排期</button>
+        <span id="eventsTimestamp" style="display:none;font-size:10px;font-family:JetBrains Mono;color:rgba(200,164,78,0.7);background:rgba(200,164,78,0.08);padding:3px 8px;border-radius:4px;border:1px solid rgba(200,164,78,0.15)"></span>
+      </div>
+    </div>
+    <div class="sec-desc">管理和查看签约主播活动排期。数据来源于Google Sheets，支持实时刷新。进行中的活动以金色高亮显示。</div>
+
+    <div id="eventsContent" style="margin-top:16px">
+      <div style="text-align:center;padding:60px 20px;color:rgba(255,255,255,0.35)">
+        <div style="font-size:13px">点击"刷新排期"加载活动数据</div>
+        <div style="font-size:11px;margin-top:6px;color:rgba(255,255,255,0.2)">或在部署后自动从API加载</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -425,7 +476,13 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
     </div>
     <div style="margin-top:20px">
       <div class="card" style="padding:20px">
-        <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:12px">最新发布内容</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7)">最新发布内容</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="refresh-btn" id="detailRefreshBtn" onclick="refreshDetailFeed()" style="font-size:11px;padding:4px 10px"><svg viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-1.76-4.24l-2.24 2.24H20V4l-2.35 2.35z"/></svg> 刷新内容</button>
+            <span id="detailFeedTimestamp" style="display:none;font-size:9px;font-family:JetBrains Mono;color:rgba(200,164,78,0.7);background:rgba(200,164,78,0.08);padding:2px 6px;border-radius:4px;border:1px solid rgba(200,164,78,0.15)"></span>
+          </div>
+        </div>
         <div id="detailFeed" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
       </div>
     </div>
@@ -507,9 +564,18 @@ const latestContent = [
 ];
 
 // ====== COMPUTED ======
+function parseFmtNum(s){if(!s||typeof s==='number')return s;const m=String(s).match(/([\d.]+)\s*([KMkm]?)/);if(!m)return null;let n=parseFloat(m[1]);if(m[2]==='K'||m[2]==='k')n*=1000;if(m[2]==='M'||m[2]==='m')n*=1000000;return Math.round(n)}
 creators.forEach(c=>{
   c.growth=((c.ytSubs-c.baseline)/c.baseline*100).toFixed(1);
   c.cpm=(c.monthlyFee/c.monthlyViews*1000).toFixed(2);
+  // TT growth: parse ttFollowers string to number, compare with ttBaseline
+  const ttRaw=parseFmtNum(c.ttFollowers);
+  c.ttFollowersRaw=ttRaw;
+  if(ttRaw&&c.ttBaseline){
+    c.ttGrowth=((ttRaw-c.ttBaseline)/c.ttBaseline*100).toFixed(1);
+  } else {
+    c.ttGrowth=null;
+  }
 });
 
 function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toString()}
@@ -524,6 +590,7 @@ const ttSvg='<svg width="13" height="13" viewBox="0 0 24 24" fill="#4db8d4"><pat
 
 // ====== NAV ======
 let chartsInit=false;
+let eventsInit=false;
 function showPage(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pg-'+id).classList.add('active');
@@ -531,6 +598,7 @@ function showPage(id,btn){
   btn.classList.add('active');
   window.scrollTo(0,0);
   if(id==='charts'&&!chartsInit){chartsInit=true;setTimeout(initAllCharts,100)}
+  if(id==='events'&&!eventsInit){eventsInit=true;refreshEvents(null)}
 }
 
 // ====== TABLE ======
@@ -541,6 +609,9 @@ function renderOverviewTable(){
     const g=parseFloat(c.growth);
     const gc=g>0?'badge-up':g===0?'badge-flat':'badge-down';
     const gs=g>0?'+':'';
+    const tg=c.ttGrowth!==null?parseFloat(c.ttGrowth):null;
+    const tgc=tg!==null?(tg>0?'badge-up':tg===0?'badge-flat':'badge-down'):'';
+    const tgs=tg!==null&&tg>0?'+':'';
     const st=statusMap[c.sentiment]||statusMap.neutral;
     const yt=c.ytUrl?`<a href="${c.ytUrl}" target="_blank" rel="noopener" class="soc soc-yt" title="YouTube">${ytSvg}</a>`:'';
     const tt=c.ttUrl?`<a href="${c.ttUrl}" target="_blank" rel="noopener" class="soc soc-tt" title="TikTok">${ttSvg}</a>`:'';
@@ -554,6 +625,7 @@ function renderOverviewTable(){
       <td class="text-r"><span class="badge ${gc}">${gs}${c.growth}%</span></td>
       <td class="text-r" style="font-family:JetBrains Mono;color:#4db8d4">${c.ttFollowers||'—'}</td>
       <td class="text-r" style="font-family:JetBrains Mono;color:rgba(255,255,255,0.35)">${ttBl}</td>
+      <td class="text-r">${tg!==null?`<span class="badge ${tgc}">${tgs}${c.ttGrowth}%</span>`:'—'}</td>
       <td class="text-r" style="font-family:JetBrains Mono;color:rgba(255,255,255,0.88)">${fmt(c.monthlyViews)}</td>
       <td class="text-r" style="font-family:JetBrains Mono;color:#f0a830">$${c.monthlyFee.toLocaleString()}</td>
       <td class="text-r" style="font-family:JetBrains Mono;color:${parseFloat(c.cpm)<1?'#40c060':parseFloat(c.cpm)<2?'#4db8d4':'#e04040'}">$${c.cpm}</td>
@@ -603,6 +675,38 @@ function renderFeed(filter){
       </div>`:''}
     </a></div>`;
   }).join('');
+  updateFeedStats();
+}
+function updateFeedStats(){
+  const allItems=liveContent||latestContent;
+  const today=new Date().toISOString().split('T')[0];
+  // Try today first; if no items today, show stats for all available items (labeled as "近期")
+  let todayItems=allItems.filter(i=>i.date&&i.date.startsWith(today));
+  let label='今日';
+  if(todayItems.length===0){
+    // Fall back to all items, show as "近期" stats
+    todayItems=allItems;
+    label='近期';
+  }
+  const ytCount=todayItems.filter(i=>i.platform==='youtube').length;
+  const ttCount=todayItems.filter(i=>i.platform==='tiktok').length;
+  document.getElementById('feedStatVideos').textContent=todayItems.length;
+  document.getElementById('feedStatVideosSub').textContent=`YT: ${ytCount} / TT: ${ttCount}`;
+  // Parse views: handle "8.9K", "~600", "42K" etc
+  const totalViews=todayItems.reduce((s,i)=>{
+    const raw=i.viewsRaw||parseFmtNum(String(i.views).replace(/[~,]/g,''));
+    return s+(raw||0);
+  },0);
+  document.getElementById('feedStatViews').textContent=totalViews>0?fmt(totalViews):'—';
+  const uniqueCreators=new Set(todayItems.map(i=>i.creator));
+  document.getElementById('feedStatCreators').textContent=uniqueCreators.size||'—';
+  // Update labels if showing "近期" stats
+  const labels=document.querySelectorAll('#feedStats div[style*="text-transform"]');
+  if(labels.length>=3){
+    labels[0].textContent=label+'新增视频';
+    labels[1].textContent=label+'播放量';
+    labels[2].textContent=label+'发布主播';
+  }
 }
 function filterFeed(f,btn){
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));
@@ -814,6 +918,91 @@ function renderInsights(){
         <li><strong style="color:#f0a830">预算调整</strong> 建议重新评估高CPM主播的合约条款，将补偿与绩效里程碑挂钩。</li>
       </ul>
     </div>`;
+  // Render event impact section if events data is available
+  renderEventImpact();
+}
+
+function renderEventImpact(){
+  const section=document.getElementById('eventImpactSection');
+  const box=document.getElementById('eventImpactCards');
+  if(!section||!box)return;
+  if(!eventsData||!eventsData.length){section.style.display='none';return;}
+
+  const ended=eventsData.filter(e=>e.status==='ended');
+  if(!ended.length){
+    // Show all events if none ended yet (for demo purposes)
+    const allEvents=eventsData;
+    if(!allEvents.length){section.style.display='none';return;}
+
+    box.innerHTML=allEvents.map(e=>{
+      const typeColor=eventTypeColors[e.type]||'rgba(255,255,255,0.5)';
+      const creatorsAnalysis=e.creators.map(name=>{
+        const hist=weeklyHistory[name];
+        if(!hist||hist.length<2)return null;
+        const last=hist[hist.length-1];
+        const prev=hist[hist.length-2];
+        const ytDelta=last.yt-prev.yt;
+        const ttDelta=(last.tt&&prev.tt)?(last.tt-prev.tt):null;
+        const wvChange=prev.wv>0?((last.wv-prev.wv)/prev.wv*100).toFixed(1):null;
+        const rc=RC[creators.find(c=>c.name===name)?.region]||'#fff';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <span style="font-size:12px;font-weight:600;color:${rc};min-width:70px">${name}</span>
+          <span style="font-size:10px;font-family:JetBrains Mono;color:${ytDelta>=0?'#40c060':'#e04040'}">YT ${ytDelta>=0?'+':''}${ytDelta>999?fmt(ytDelta):ytDelta}</span>
+          ${ttDelta!==null?`<span style="font-size:10px;font-family:JetBrains Mono;color:${ttDelta>=0?'#40c060':'#e04040'}">TT ${ttDelta>=0?'+':''}${ttDelta>999?fmt(ttDelta):ttDelta}</span>`:''}
+          ${wvChange!==null?`<span style="font-size:10px;font-family:JetBrains Mono;color:${parseFloat(wvChange)>=0?'#4db8d4':'#e04040'}">播放 ${parseFloat(wvChange)>=0?'+':''}${wvChange}%</span>`:''}
+        </div>`;
+      }).filter(Boolean).join('');
+
+      return `<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:14px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-family:Rajdhani;font-size:14px;font-weight:700;color:rgba(255,255,255,0.85)">${e.name}</span>
+          <span style="font-size:9px;color:${typeColor};background:${typeColor}15;padding:1px 5px;border-radius:3px;border:1px solid ${typeColor}30">${e.type}</span>
+        </div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:8px">${e.startDate} → ${e.endDate}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px">参与主播最近周数据变化:</div>
+        ${creatorsAnalysis}
+      </div>`;
+    }).join('');
+    section.style.display='block';
+    return;
+  }
+
+  // Render ended events with before/after comparison
+  box.innerHTML=ended.map(e=>{
+    const typeColor=eventTypeColors[e.type]||'rgba(255,255,255,0.5)';
+    const creatorsAnalysis=e.creators.map(name=>{
+      const hist=weeklyHistory[name];
+      if(!hist||hist.length<3)return null;
+      // Find data points: closest before startDate, closest after endDate
+      let before=null,after=null;
+      for(let i=0;i<hist.length;i++){
+        if(hist[i].d<=e.startDate)before=hist[i];
+        if(!after&&hist[i].d>=e.endDate)after=hist[i];
+      }
+      if(!before||!after)return null;
+      const ytDelta=after.yt-before.yt;
+      const ttDelta=(after.tt&&before.tt)?(after.tt-before.tt):null;
+      const wvChange=before.wv>0?((after.wv-before.wv)/before.wv*100).toFixed(1):null;
+      const rc=RC[creators.find(c=>c.name===name)?.region]||'#fff';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <span style="font-size:12px;font-weight:600;color:${rc};min-width:70px">${name}</span>
+        <span style="font-size:10px;font-family:JetBrains Mono;color:${ytDelta>=0?'#40c060':'#e04040'}">YT ${ytDelta>=0?'+':''}${ytDelta>999?fmt(ytDelta):ytDelta}</span>
+        ${ttDelta!==null?`<span style="font-size:10px;font-family:JetBrains Mono;color:${ttDelta>=0?'#40c060':'#e04040'}">TT ${ttDelta>=0?'+':''}${ttDelta>999?fmt(ttDelta):ttDelta}</span>`:''}
+        ${wvChange!==null?`<span style="font-size:10px;font-family:JetBrains Mono;color:${parseFloat(wvChange)>=0?'#4db8d4':'#e04040'}">播放 ${parseFloat(wvChange)>=0?'+':''}${wvChange}%</span>`:''}
+      </div>`;
+    }).filter(Boolean).join('');
+
+    return `<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:14px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-family:Rajdhani;font-size:14px;font-weight:700;color:rgba(255,255,255,0.85)">${e.name}</span>
+        <span style="font-size:9px;color:${typeColor};background:${typeColor}15;padding:1px 5px;border-radius:3px;border:1px solid ${typeColor}30">${e.type}</span>
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:8px">${e.startDate} → ${e.endDate}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px">活动前后对比:</div>
+      ${creatorsAnalysis||'<div style="font-size:11px;color:rgba(255,255,255,0.25)">数据不足</div>'}
+    </div>`;
+  }).join('');
+  section.style.display='block';
 }
 
 // ====== WEEKLY HISTORY DATA ======
@@ -838,6 +1027,79 @@ const API_URL='https://ab-tracker-api.vercel.app/api/refresh';
 const API_CREATORS='/api/creators';
 const API_HISTORY='/api/history';
 const API_DAILY_HISTORY='/api/daily-history';
+const API_EVENTS='/api/events';
+
+// ====== EVENTS ======
+let eventsData=null;
+const eventTypeColors={'直播':'#e05050','赛事':'#4db8d4','联动':'#a864dc','推广':'#f0a830','赠品':'#40c060'};
+
+function renderEvents(){
+  const box=document.getElementById('eventsContent');
+  if(!eventsData||!eventsData.length){
+    box.innerHTML='<div style="text-align:center;padding:60px 20px;color:rgba(255,255,255,0.35);font-size:13px">暂无活动数据</div>';
+    return;
+  }
+  const today=new Date().toISOString().split('T')[0];
+  // Group: active first, then upcoming, then ended
+  const active=eventsData.filter(e=>e.status==='active');
+  const upcoming=eventsData.filter(e=>e.status==='upcoming');
+  const ended=eventsData.filter(e=>e.status==='ended');
+  const sorted=[...active,...upcoming,...ended];
+
+  box.innerHTML=sorted.map(e=>{
+    const isActive=e.status==='active';
+    const isEnded=e.status==='ended';
+    const borderColor=isActive?'rgba(200,164,78,0.6)':isEnded?'rgba(255,255,255,0.06)':'rgba(255,255,255,0.1)';
+    const opacity=isEnded?'0.5':'1';
+    const typeColor=eventTypeColors[e.type]||'rgba(255,255,255,0.5)';
+    const statusLabel=isActive?'<span style="color:#c8a44e;font-size:10px;font-weight:700;font-family:JetBrains Mono;background:rgba(200,164,78,0.1);padding:2px 6px;border-radius:3px;border:1px solid rgba(200,164,78,0.3)">进行中</span>':isEnded?'<span style="color:rgba(255,255,255,0.3);font-size:10px;font-family:JetBrains Mono">已结束</span>':'<span style="color:rgba(255,255,255,0.5);font-size:10px;font-family:JetBrains Mono">即将开始</span>';
+    const creatorsHtml=e.creators.map(name=>{
+      const cr=creators.find(c=>c.name===name);
+      const rc=cr?RC[cr.region]:'rgba(255,255,255,0.5)';
+      return `<span style="font-size:11px;color:${rc};font-weight:600;background:rgba(255,255,255,0.03);padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,0.06);cursor:pointer" onclick="showCreatorDetail('${name}')">${name}</span>`;
+    }).join(' ');
+    return `<div class="card" style="padding:16px;margin-bottom:10px;border:1px solid ${borderColor};opacity:${opacity};${isActive?'box-shadow:0 0 12px rgba(200,164,78,0.1);':''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:Rajdhani;font-size:16px;font-weight:700;color:${isActive?'#c8a44e':'rgba(255,255,255,0.85)'}">${e.name}</span>
+          <span style="font-size:10px;color:${typeColor};background:${typeColor}15;padding:2px 6px;border-radius:3px;border:1px solid ${typeColor}30;font-weight:600">${e.type}</span>
+        </div>
+        ${statusLabel}
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;font-family:JetBrains Mono;font-size:11px">
+        <span style="color:rgba(255,255,255,0.5)">📅 ${e.startDate} → ${e.endDate}</span>
+        <span style="color:rgba(255,255,255,0.3)">${Math.ceil((new Date(e.endDate)-new Date(e.startDate))/(1000*60*60*24)+1)}天</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${e.note?'8':'0'}px">${creatorsHtml}</div>
+      ${e.note?`<div style="font-size:11px;color:rgba(255,255,255,0.35);border-top:1px solid rgba(255,255,255,0.04);padding-top:8px">${e.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function refreshEvents(btn){
+  if(btn){btn.classList.add('spinning');btn.disabled=true;}
+  const box=document.getElementById('eventsContent');
+  box.innerHTML='<div style="text-align:center;padding:60px 20px;color:rgba(255,255,255,0.45);font-size:13px"><div style="margin-bottom:8px;font-size:20px;animation:spin 1s linear infinite;display:inline-block">↻</div><div>正在加载活动排期...</div></div>';
+  fetch(API_EVENTS)
+    .then(r=>{if(!r.ok)throw new Error('API返回 '+r.status);return r.json()})
+    .then(json=>{
+      if(!json.success)throw new Error(json.error||'Unknown error');
+      eventsData=json.events;
+      renderEvents();
+      const ts=document.getElementById('eventsTimestamp');
+      if(ts){
+        const t=json.updatedAt?new Date(json.updatedAt):new Date();
+        ts.textContent=(json.source==='demo'?'[示例数据] ':'')+' 更新于 '+t.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+        ts.style.display='inline-block';
+      }
+      if(btn){btn.classList.remove('spinning');btn.disabled=false;}
+    })
+    .catch(err=>{
+      console.error('Events refresh error:',err);
+      box.innerHTML='<div style="text-align:center;padding:60px 20px;color:#e04040;font-size:13px"><div style="margin-bottom:8px;font-size:20px">✕</div><div>加载失败: '+err.message+'</div></div>';
+      if(btn){btn.classList.remove('spinning');btn.disabled=false;}
+    });
+}
 
 // Merge weekly history + daily history into a combined timeline
 function mergeHistory(weekly, daily){
@@ -963,29 +1225,31 @@ function refreshData(btn){
       });
 
   } else if(pageId==='pg-insights'){
-    fetch(API_CREATORS)
-      .then(r=>{if(!r.ok)throw new Error('API返回 '+r.status);return r.json()})
-      .then(json=>{
-        if(json.success&&json.creators){
-          json.creators.forEach(lc=>{
-            const c=creators.find(cr=>cr.name===lc.name);
-            if(c){
-              if(lc.ytSubs)c.ytSubs=lc.ytSubs;
-              if(lc.growth!==undefined)c.growth=lc.growth;else c.growth=((c.ytSubs-c.baseline)/c.baseline*100).toFixed(1);
-              if(lc.cpm!==undefined)c.cpm=lc.cpm;else c.cpm=(c.monthlyFee/c.monthlyViews*1000).toFixed(2);
-              if(lc.ttFollowers)c.ttFollowers=lc.ttFollowers;
-              if(lc.monthlyViews)c.monthlyViews=lc.monthlyViews;
-            }
-          });
-        }
-        renderInsights();
-        showTimestamp('insightsTimestamp',json.updatedAt?new Date(json.updatedAt):null);
-        done();
-      })
-      .catch(err=>{
-        console.error('Insights refresh error:',err);
-        done();
-      });
+    // Fetch creators and events data in parallel
+    Promise.all([
+      fetch(API_CREATORS).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(API_EVENTS).then(r=>r.ok?r.json():null).catch(()=>null)
+    ]).then(([creatorsJson,eventsJson])=>{
+      if(creatorsJson&&creatorsJson.success&&creatorsJson.creators){
+        creatorsJson.creators.forEach(lc=>{
+          const c=creators.find(cr=>cr.name===lc.name);
+          if(c){
+            if(lc.ytSubs)c.ytSubs=lc.ytSubs;
+            if(lc.growth!==undefined)c.growth=lc.growth;else c.growth=((c.ytSubs-c.baseline)/c.baseline*100).toFixed(1);
+            if(lc.cpm!==undefined)c.cpm=lc.cpm;else c.cpm=(c.monthlyFee/c.monthlyViews*1000).toFixed(2);
+            if(lc.ttFollowers)c.ttFollowers=lc.ttFollowers;
+            if(lc.monthlyViews)c.monthlyViews=lc.monthlyViews;
+          }
+        });
+      }
+      if(eventsJson&&eventsJson.success)eventsData=eventsJson.events;
+      renderInsights();
+      showTimestamp('insightsTimestamp',creatorsJson&&creatorsJson.updatedAt?new Date(creatorsJson.updatedAt):null);
+      done();
+    }).catch(err=>{
+      console.error('Insights refresh error:',err);
+      done();
+    });
 
   } else {
     // Unknown page: cosmetic spinner fallback
@@ -996,8 +1260,10 @@ function refreshData(btn){
 // ====== CREATOR DETAIL ======
 let prevPage='overview';
 let detailCharts=[];
+let currentDetailCreator=null;
 
 function showCreatorDetail(name){
+  currentDetailCreator=name;
   const pages=document.querySelectorAll('.page');
   pages.forEach(p=>{if(p.classList.contains('active'))prevPage=p.id.replace('pg-','')});
   pages.forEach(p=>p.classList.remove('active'));
@@ -1120,8 +1386,23 @@ function renderDetailChartsInner(hist,c){
   if(!hist||!hist.length)return;
   const dates=hist.map(h=>h.d.slice(5));
 
+  // Get events for this creator (if events data loaded)
+  const creatorEvents=(eventsData||[]).filter(e=>e.creators.includes(c.name));
+  const markAreaData=creatorEvents.length?creatorEvents.map(e=>[
+    {name:e.name,xAxis:e.startDate.slice(5)},
+    {xAxis:e.endDate.slice(5)}
+  ]):null;
+  const markAreaOpt=markAreaData?{
+    silent:true,
+    itemStyle:{color:'rgba(200,164,78,0.08)',borderColor:'rgba(200,164,78,0.25)',borderWidth:1},
+    label:{show:true,position:'insideTop',fontFamily:'Rajdhani',fontSize:9,color:'rgba(200,164,78,0.6)'},
+    data:markAreaData
+  }:undefined;
+
   // Common chart options
   function lineOpt(title,data,color,yFmt){
+    const seriesItem={type:'line',data:data,smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:color},itemStyle:{color:color},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:color.replace(')',',0.15)').replace('rgb','rgba')},{offset:1,color:'rgba(0,0,0,0)'}])}};
+    if(markAreaOpt)seriesItem.markArea=markAreaOpt;
     return {
       tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
         const idx=p[0].dataIndex;const h=hist[idx];
@@ -1130,7 +1411,7 @@ function renderDetailChartsInner(hist,c){
       grid:{left:60,right:20,top:20,bottom:30},
       xAxis:{type:'category',data:dates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
       yAxis:{type:'value',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:typeof yFmt==='function'?yFmt:v=>fmt(v)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
-      series:[{type:'line',data:data,smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:color},itemStyle:{color:color},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:color.replace(')',',0.15)').replace('rgb','rgba')},{offset:1,color:'rgba(0,0,0,0)'}])}}],
+      series:[seriesItem],
       animationDuration:800
     };
   }
@@ -1164,7 +1445,7 @@ function renderDetailChartsInner(hist,c){
         const viewsDates=viewsHist.map(h=>h.d.slice(5));
         const ch3=echarts.init(el3,null,{renderer:'svg'});
         const hasTTViews=viewsHist.some(h=>h.ttv!==null&&h.ttv!==undefined);
-        const viewsSeries=[{type:'line',name:'YouTube',data:viewsHist.map(h=>h.ytv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#ff5050'},itemStyle:{color:'#ff5050'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(255,80,80,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}}];
+        const viewsSeries=[{type:'line',name:'YouTube',data:viewsHist.map(h=>h.ytv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#ff5050'},itemStyle:{color:'#ff5050'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(255,80,80,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])},markArea:markAreaOpt||undefined}];
         if(hasTTViews){viewsSeries.push({type:'line',name:'TikTok',data:viewsHist.map(h=>h.ttv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#4db8d4'},itemStyle:{color:'#4db8d4'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(77,184,212,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}});}
         ch3.setOption({
           tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
@@ -1216,6 +1497,61 @@ function renderDetailChartsInner(hist,c){
   },150);
 }
 
+function refreshDetailFeed(){
+  if(!currentDetailCreator)return;
+  const btn=document.getElementById('detailRefreshBtn');
+  const df=document.getElementById('detailFeed');
+  if(btn){btn.classList.add('spinning');btn.disabled=true;}
+  df.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.45);font-size:13px"><div style="margin-bottom:8px;font-size:20px;animation:spin 1s linear infinite;display:inline-block">↻</div><div>正在获取最新内容...</div></div>';
+  fetch(API_URL)
+    .then(r=>{if(!r.ok)throw new Error('API返回 '+r.status);return r.json()})
+    .then(json=>{
+      if(!json.success)throw new Error(json.error||'Unknown error');
+      liveContent=json.data;
+      // Re-render detailFeed for current creator
+      const name=currentDetailCreator;
+      const contentSource=liveContent||latestContent;
+      const myContent=contentSource.filter(i=>i.creator===name);
+      if(myContent.length){
+        df.innerHTML=myContent.map(item=>{
+          const pc=item.platform==='youtube'?'plat-yt':'plat-tt';
+          const pl=item.platform==='youtube'?'YouTube':'TikTok';
+          const pi=item.platform==='youtube'?ytSvg:ttSvg;
+          const sc=item.sentiment==='positive'?'#40c060':item.sentiment==='mixed'?'#f0a830':'rgba(255,255,255,0.4)';
+          const sl=item.sentiment==='positive'?'正面':item.sentiment==='mixed'?'观察':'中性';
+          return `<div class="feed-item"><a href="${item.url}" target="_blank" rel="noopener">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span class="plat ${pc}">${pi} ${pl}</span>
+              <span style="font-family:JetBrains Mono;font-size:10px;color:rgba(255,255,255,0.4)">${item.date||''}</span>
+            </div>
+            <p style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.4;margin-bottom:8px">${item.title}</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;font-family:JetBrains Mono;font-size:10px">
+              <span style="color:rgba(255,255,255,0.7)">▶ ${item.views}</span>
+              ${item.likes?`<span style="color:#e05050">♥ ${item.likes}</span>`:''}
+              ${item.comments?`<span style="color:#4db8d4">💬 ${item.comments}</span>`:''}
+              <span style="display:inline-flex;align-items:center;gap:3px"><span style="width:5px;height:5px;border-radius:50%;background:${sc}"></span><span style="color:${sc}">${sl}</span></span>
+            </div>
+          </a></div>`;
+        }).join('');
+      } else {
+        df.innerHTML='<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:20px;text-align:center">暂无该主播的最新内容数据</div>';
+      }
+      // Show timestamp
+      const ts=document.getElementById('detailFeedTimestamp');
+      if(ts){
+        const t=json.updatedAt?new Date(json.updatedAt):new Date();
+        ts.textContent='更新于 '+t.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+        ts.style.display='inline-block';
+      }
+      if(btn){btn.classList.remove('spinning');btn.disabled=false;}
+    })
+    .catch(err=>{
+      console.error('Detail feed refresh error:',err);
+      df.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#e04040;font-size:13px"><div style="margin-bottom:8px;font-size:20px">✕</div><div>获取失败: '+err.message+'</div></div>';
+      if(btn){btn.classList.remove('spinning');btn.disabled=false;}
+    });
+}
+
 function goBackFromDetail(){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const targetId='pg-'+prevPage;
@@ -1224,7 +1560,7 @@ function goBackFromDetail(){
   else document.getElementById('pg-overview').classList.add('active');
   // Restore nav active
   const navBtns=document.querySelectorAll('.nav-btn');
-  const pageMap={overview:0,charts:1,feed:2,creators:3,insights:4};
+  const pageMap={overview:0,charts:1,feed:2,creators:3,insights:4,events:5};
   navBtns.forEach(b=>b.classList.remove('active'));
   if(pageMap[prevPage]!==undefined&&navBtns[pageMap[prevPage]])navBtns[pageMap[prevPage]].classList.add('active');
   else navBtns[0].classList.add('active');
