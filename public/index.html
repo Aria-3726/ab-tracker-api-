@@ -214,7 +214,7 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
             <th>主播</th><th class="text-c">社媒</th><th>区域</th>
             <th class="text-r">YT订阅</th><th class="text-r">YT基准</th><th class="text-r">YT增长</th>
             <th class="text-r">TT粉丝</th><th class="text-r">TT基准</th><th class="text-r">TT增长</th>
-            <th class="text-r">月播放</th><th class="text-r">月费</th><th class="text-r">CPM</th><th class="text-c">状态</th>
+            <th class="text-r" id="thMonthlyViews">月播放</th><th class="text-r">月费</th><th class="text-r">CPM</th><th class="text-c">状态</th>
           </tr></thead>
           <tbody id="tBody"></tbody>
         </table>
@@ -438,6 +438,16 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
     </div>
     <div class="sec-desc">管理和查看签约主播活动排期。数据来源于Google Sheets，支持实时刷新。进行中的活动以金色高亮显示。</div>
 
+    <!-- Gantt Chart -->
+    <div class="card" style="padding:20px;margin-top:16px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="width:8px;height:8px;border-radius:50%;background:#c8a44e"></div>
+        <span style="font-family:Rajdhani;font-size:14px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:1px">活动甘特图</span>
+      </div>
+      <div id="eventsGanttChart" style="width:100%;min-height:280px"></div>
+    </div>
+
+    <!-- Event List -->
     <div id="eventsContent" style="margin-top:16px">
       <div style="text-align:center;padding:60px 20px;color:rgba(255,255,255,0.35)">
         <div style="font-size:13px">点击"刷新排期"加载活动数据</div>
@@ -465,12 +475,12 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
       </div>
       <div class="card" style="padding:20px">
         <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">YouTube & TikTok 播放量趋势</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">分平台周播放量估算（红色=YouTube，青色=TikTok）</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">分平台周播放量（红色=YouTube，青色=TikTok）。虚线区域为估算值。</div>
         <div class="detail-chart" id="detailViewsChart"></div>
       </div>
       <div class="card" style="padding:20px">
         <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">CPM 效率趋势</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">CPM变化趋势（月费/月播放×1000）</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">按月结算CPM（月费 / 当月总播放 × 1000），每月1日起算</div>
         <div class="detail-chart" id="detailCpmChart"></div>
       </div>
     </div>
@@ -565,7 +575,30 @@ const latestContent = [
 
 // ====== COMPUTED ======
 function parseFmtNum(s){if(!s||typeof s==='number')return s;const m=String(s).match(/([\d.]+)\s*([KMkm]?)/);if(!m)return null;let n=parseFloat(m[1]);if(m[2]==='K'||m[2]==='k')n*=1000;if(m[2]==='M'||m[2]==='m')n*=1000000;return Math.round(n)}
+
+// Compute monthly period label and actual monthly views from weeklyHistory
+const now=new Date();
+const lastMonth=new Date(now.getFullYear(),now.getMonth()-1,1);
+const monthlyPeriodLabel=(lastMonth.getMonth()+1)+'月';
+const monthlyPeriodFull=lastMonth.getFullYear()+'年'+(lastMonth.getMonth()+1)+'月';
+
+// Compute actual monthly views: sum wv for weeks falling in last month
+function computeMonthlyViews(name){
+  const hist=weeklyHistory[name];
+  if(!hist)return null;
+  const y=lastMonth.getFullYear();
+  const m=lastMonth.getMonth();
+  const mStart=new Date(y,m,1).toISOString().split('T')[0];
+  const mEnd=new Date(y,m+1,0).toISOString().split('T')[0]; // last day of month
+  const monthWeeks=hist.filter(h=>h.d>=mStart&&h.d<=mEnd&&h.wv!==null);
+  if(!monthWeeks.length)return null;
+  return monthWeeks.reduce((s,h)=>s+h.wv,0);
+}
+
 creators.forEach(c=>{
+  // Compute actual monthly views from history if available
+  const actualMonthly=computeMonthlyViews(c.name);
+  if(actualMonthly!==null)c.monthlyViews=actualMonthly;
   c.growth=((c.ytSubs-c.baseline)/c.baseline*100).toFixed(1);
   c.cpm=(c.monthlyFee/c.monthlyViews*1000).toFixed(2);
   // TT growth: parse ttFollowers string to number, compare with ttBaseline
@@ -577,6 +610,12 @@ creators.forEach(c=>{
     c.ttGrowth=null;
   }
 });
+
+// Update table header to show month period
+setTimeout(()=>{
+  const th=document.getElementById('thMonthlyViews');
+  if(th)th.textContent=monthlyPeriodLabel+'播放';
+},0);
 
 function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toString()}
 
@@ -749,7 +788,7 @@ function renderCreatorCards(){
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px;text-align:center">
         <div style="background:rgba(255,255,255,0.02);border-radius:4px;padding:6px">
-          <div style="font-family:JetBrains Mono;font-size:9px;color:rgba(255,255,255,0.3);text-transform:uppercase">月播放</div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:rgba(255,255,255,0.3);text-transform:uppercase">${monthlyPeriodLabel}播放</div>
           <div style="font-family:JetBrains Mono;font-size:11px;color:rgba(255,255,255,0.8);font-weight:600">${fmt(c.monthlyViews)}</div>
         </div>
         <div style="background:rgba(255,255,255,0.02);border-radius:4px;padding:6px">
@@ -1031,7 +1070,90 @@ const API_EVENTS='/api/events';
 
 // ====== EVENTS ======
 let eventsData=null;
+let ganttChart=null;
 const eventTypeColors={'直播':'#e05050','赛事':'#4db8d4','联动':'#a864dc','推广':'#f0a830','赠品':'#40c060'};
+
+function renderGanttChart(){
+  const el=document.getElementById('eventsGanttChart');
+  if(!el||!eventsData||!eventsData.length){
+    if(el)el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无活动数据</div>';
+    return;
+  }
+  if(ganttChart){try{ganttChart.dispose()}catch(e){}}
+  ganttChart=echarts.init(el,null,{renderer:'svg'});
+
+  // Sort events by startDate
+  const sorted=[...eventsData].sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const categories=sorted.map(e=>e.name);
+  const today=new Date().toISOString().split('T')[0];
+
+  // Find date range for xAxis
+  const allDates=sorted.flatMap(e=>[e.startDate,e.endDate]);
+  allDates.push(today);
+  const minDate=allDates.reduce((a,b)=>a<b?a:b);
+  const maxDate=allDates.reduce((a,b)=>a>b?a:b);
+  // Extend by 3 days on each side
+  const minD=new Date(minDate);minD.setDate(minD.getDate()-3);
+  const maxD=new Date(maxDate);maxD.setDate(maxD.getDate()+3);
+
+  // Adjust chart height based on number of events
+  el.style.minHeight=Math.max(200,sorted.length*42+80)+'px';
+  ganttChart.resize();
+
+  const seriesData=sorted.map((e,i)=>{
+    const color=eventTypeColors[e.type]||'rgba(200,164,78,0.6)';
+    const isActive=e.status==='active';
+    const isEnded=e.status==='ended';
+    return {
+      name:e.name,
+      value:[i,new Date(e.startDate).getTime(),new Date(e.endDate).getTime()+86400000,e.type],
+      itemStyle:{
+        color:isEnded?'rgba(255,255,255,0.08)':color,
+        borderColor:isActive?'#c8a44e':(isEnded?'rgba(255,255,255,0.1)':color),
+        borderWidth:isActive?2:1,
+        borderRadius:4,
+        opacity:isEnded?0.5:1
+      }
+    };
+  });
+
+  ganttChart.setOption({
+    tooltip:{...ttStyle(),formatter:p=>{
+      const e=sorted[p.value[0]];
+      const days=Math.ceil((new Date(e.endDate)-new Date(e.startDate))/(86400000))+1;
+      const statusLabel=e.status==='active'?'<span style="color:#c8a44e">进行中</span>':e.status==='ended'?'<span style="color:rgba(255,255,255,0.4)">已结束</span>':'<span style="color:rgba(255,255,255,0.6)">即将开始</span>';
+      return `<div style="font-family:Rajdhani;font-size:14px;color:#c8a44e;margin-bottom:4px">${e.name}</div><div style="margin-bottom:3px">${statusLabel} · <span style="color:${eventTypeColors[e.type]||'#fff'}">${e.type}</span></div><div style="font-family:JetBrains Mono;font-size:10px;color:rgba(255,255,255,0.5)">${e.startDate} → ${e.endDate} (${days}天)</div><div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:4px">主播: ${e.creators.join(', ')}</div>`;
+    }},
+    grid:{left:120,right:30,top:10,bottom:30},
+    xAxis:{type:'time',min:minD.getTime(),max:maxD.getTime(),axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.3)',formatter:v=>{const d=new Date(v);return (d.getMonth()+1)+'/'+d.getDate();}},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisTick:{show:false}},
+    yAxis:{type:'category',data:categories,inverse:true,axisLabel:{fontFamily:'Rajdhani',fontSize:11,fontWeight:600,color:'rgba(255,255,255,0.6)',width:100,overflow:'truncate'},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
+    series:[{
+      type:'custom',
+      renderItem:function(params,api){
+        const catIdx=api.value(0);
+        const start=api.coord([api.value(1),catIdx]);
+        const end=api.coord([api.value(2),catIdx]);
+        const height=api.size([0,1])[1]*0.6;
+        const rectShape=echarts.graphic.clipRectByRect({x:start[0],y:start[1]-height/2,width:end[0]-start[0],height:height},{x:params.coordSys.x,y:params.coordSys.y,width:params.coordSys.width,height:params.coordSys.height});
+        return rectShape&&{type:'rect',shape:rectShape,style:api.style()};
+      },
+      encode:{x:[1,2],y:0},
+      data:seriesData
+    },{
+      // Today marker
+      type:'custom',
+      renderItem:function(params,api){
+        const todayTs=new Date(today).getTime();
+        const x=api.coord([todayTs,0])[0];
+        return {type:'line',shape:{x1:x,y1:params.coordSys.y,x2:x,y2:params.coordSys.y+params.coordSys.height},style:{stroke:'rgba(200,164,78,0.5)',lineWidth:1,lineDash:[4,3]}};
+      },
+      data:[{value:[0]}],
+      silent:true
+    }],
+    animationDuration:600
+  });
+  window.addEventListener('resize',()=>{if(ganttChart)ganttChart.resize()});
+}
 
 function renderEvents(){
   const box=document.getElementById('eventsContent');
@@ -1039,6 +1161,9 @@ function renderEvents(){
     box.innerHTML='<div style="text-align:center;padding:60px 20px;color:rgba(255,255,255,0.35);font-size:13px">暂无活动数据</div>';
     return;
   }
+  // Render Gantt chart
+  renderGanttChart();
+
   const today=new Date().toISOString().split('T')[0];
   // Group: active first, then upcoming, then ended
   const active=eventsData.filter(e=>e.status==='active');
@@ -1046,7 +1171,7 @@ function renderEvents(){
   const ended=eventsData.filter(e=>e.status==='ended');
   const sorted=[...active,...upcoming,...ended];
 
-  box.innerHTML=sorted.map(e=>{
+  box.innerHTML=sorted.map((e,idx)=>{
     const isActive=e.status==='active';
     const isEnded=e.status==='ended';
     const borderColor=isActive?'rgba(200,164,78,0.6)':isEnded?'rgba(255,255,255,0.06)':'rgba(255,255,255,0.1)';
@@ -1058,6 +1183,18 @@ function renderEvents(){
       const rc=cr?RC[cr.region]:'rgba(255,255,255,0.5)';
       return `<span style="font-size:11px;color:${rc};font-weight:600;background:rgba(255,255,255,0.03);padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,0.06);cursor:pointer" onclick="showCreatorDetail('${name}')">${name}</span>`;
     }).join(' ');
+
+    // Expandable retrospective section for ended events
+    let retroHtml='';
+    if(isEnded){
+      retroHtml=`<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.04);padding-top:8px">
+        <div onclick="toggleEventRetro(this)" style="cursor:pointer;display:flex;align-items:center;gap:6px;color:#c8a44e;font-size:11px;font-weight:600;font-family:Rajdhani;letter-spacing:0.5px">
+          <span class="retro-arrow" style="transition:transform 0.2s;display:inline-block">▶</span> 活动复盘详情
+        </div>
+        <div class="retro-content" style="display:none;margin-top:10px" data-event-idx="${idx}"></div>
+      </div>`;
+    }
+
     return `<div class="card" style="padding:16px;margin-bottom:10px;border:1px solid ${borderColor};opacity:${opacity};${isActive?'box-shadow:0 0 12px rgba(200,164,78,0.1);':''}">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px">
@@ -1070,10 +1207,121 @@ function renderEvents(){
         <span style="color:rgba(255,255,255,0.5)">📅 ${e.startDate} → ${e.endDate}</span>
         <span style="color:rgba(255,255,255,0.3)">${Math.ceil((new Date(e.endDate)-new Date(e.startDate))/(1000*60*60*24)+1)}天</span>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${e.note?'8':'0'}px">${creatorsHtml}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${e.note||isEnded?'8':'0'}px">${creatorsHtml}</div>
       ${e.note?`<div style="font-size:11px;color:rgba(255,255,255,0.35);border-top:1px solid rgba(255,255,255,0.04);padding-top:8px">${e.note}</div>`:''}
+      ${retroHtml}
     </div>`;
   }).join('');
+}
+
+// Toggle event retrospective card
+function toggleEventRetro(el){
+  const arrow=el.querySelector('.retro-arrow');
+  const content=el.parentElement.querySelector('.retro-content');
+  if(!content)return;
+  const isOpen=content.style.display!=='none';
+  content.style.display=isOpen?'none':'block';
+  arrow.style.transform=isOpen?'':'rotate(90deg)';
+  // Lazy load retrospective data on first open
+  if(!isOpen&&!content.dataset.loaded){
+    content.dataset.loaded='1';
+    loadEventRetro(content);
+  }
+}
+
+// Load retrospective data for an event
+function loadEventRetro(contentEl){
+  const idx=parseInt(contentEl.dataset.eventIdx);
+  // Get sorted events in the same order as rendered
+  const active=eventsData.filter(e=>e.status==='active');
+  const upcoming=eventsData.filter(e=>e.status==='upcoming');
+  const ended=eventsData.filter(e=>e.status==='ended');
+  const sorted=[...active,...upcoming,...ended];
+  const evt=sorted[idx];
+  if(!evt){contentEl.innerHTML='<div style="color:rgba(255,255,255,0.25);font-size:11px">无数据</div>';return;}
+
+  // Show loading
+  contentEl.innerHTML='<div style="color:rgba(255,255,255,0.35);font-size:11px;padding:8px 0"><span style="animation:spin 1s linear infinite;display:inline-block">↻</span> 正在加载复盘数据...</div>';
+
+  // Try to fetch video data from refresh API for each creator
+  const videoFetches=evt.creators.map(name=>
+    fetch(API_URL).then(r=>r.ok?r.json():null).catch(()=>null)
+  );
+
+  // We only need one fetch since API returns all creators
+  fetch(API_URL).then(r=>r.ok?r.json():null).catch(()=>null).then(refreshJson=>{
+    const allVideos=refreshJson&&refreshJson.success?refreshJson.data:liveContent||latestContent;
+
+    // Build retrospective for each creator
+    let html='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">';
+    evt.creators.forEach(name=>{
+      const cr=creators.find(c=>c.name===name);
+      const rc=cr?RC[cr.region]:'rgba(255,255,255,0.5)';
+      const hist=weeklyHistory[name];
+
+      // Find before/after data points
+      let before=null,after=null;
+      if(hist){
+        for(let i=0;i<hist.length;i++){
+          if(hist[i].d<=evt.startDate)before=hist[i];
+          if(!after&&hist[i].d>=evt.endDate)after=hist[i];
+        }
+      }
+
+      // Find videos during the event period for this creator
+      const eventVideos=(allVideos||[]).filter(v=>
+        v.creator===name&&v.date&&v.date>=evt.startDate&&v.date<=evt.endDate
+      );
+      // Also find recent videos from the creator (if no exact matches during event period)
+      const creatorVideos=eventVideos.length?eventVideos:(allVideos||[]).filter(v=>v.creator===name).slice(0,3);
+
+      // Compute deltas
+      const ytDelta=before&&after?(after.yt-before.yt):null;
+      const ttDelta=before&&after&&after.tt&&before.tt?(after.tt-before.tt):null;
+      const wvBefore=before?before.wv:null;
+      const wvAfter=after?after.wv:null;
+      const wvChange=wvBefore&&wvAfter?((wvAfter-wvBefore)/wvBefore*100).toFixed(1):null;
+
+      const deltaHtml=before&&after?`
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <div style="background:rgba(255,255,255,0.02);border-radius:4px;padding:4px 8px;font-family:JetBrains Mono;font-size:10px">
+            <span style="color:rgba(255,255,255,0.35)">YT</span>
+            <span style="color:${ytDelta>=0?'#40c060':'#e04040'};font-weight:600"> ${ytDelta>=0?'+':''}${ytDelta>999?fmt(ytDelta):ytDelta}</span>
+          </div>
+          ${ttDelta!==null?`<div style="background:rgba(255,255,255,0.02);border-radius:4px;padding:4px 8px;font-family:JetBrains Mono;font-size:10px">
+            <span style="color:rgba(255,255,255,0.35)">TT</span>
+            <span style="color:${ttDelta>=0?'#40c060':'#e04040'};font-weight:600"> ${ttDelta>=0?'+':''}${ttDelta>999?fmt(ttDelta):ttDelta}</span>
+          </div>`:''}
+          ${wvChange!==null?`<div style="background:rgba(255,255,255,0.02);border-radius:4px;padding:4px 8px;font-family:JetBrains Mono;font-size:10px">
+            <span style="color:rgba(255,255,255,0.35)">播放</span>
+            <span style="color:${parseFloat(wvChange)>=0?'#4db8d4':'#e04040'};font-weight:600"> ${parseFloat(wvChange)>=0?'+':''}${wvChange}%</span>
+          </div>`:''}
+        </div>`:'<div style="font-size:10px;color:rgba(255,255,255,0.2);margin-bottom:8px">数据不足以计算变化</div>';
+
+      // Video links
+      const videosHtml=creatorVideos.length?creatorVideos.map(v=>{
+        const pc=v.platform==='youtube'?'plat-yt':'plat-tt';
+        const pl=v.platform==='youtube'?'YT':'TT';
+        return `<a href="${v.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:6px;padding:4px 0;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.03)">
+          <span class="plat ${pc}" style="font-size:8px;padding:1px 4px">${pl}</span>
+          <span style="font-size:10px;color:rgba(255,255,255,0.6);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.title}</span>
+          <span style="font-size:9px;font-family:JetBrains Mono;color:rgba(255,255,255,0.35)">▶${v.views}</span>
+        </a>`;
+      }).join(''):'<div style="font-size:10px;color:rgba(255,255,255,0.2)">暂无视频数据</div>';
+
+      html+=`<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-family:Rajdhani;font-size:13px;font-weight:700;color:${rc}">${name}</span>
+          <span class="region ${regionCls[cr?.region]||''}" style="font-size:8px;padding:1px 4px">${cr?.region||''}</span>
+        </div>
+        ${deltaHtml}
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:4px;font-weight:600">相关视频:</div>
+        ${videosHtml}
+      </div>`;
+    });
+    html+='</div>';
+    contentEl.innerHTML=html;
+  });
 }
 
 function refreshEvents(btn){
@@ -1102,12 +1350,15 @@ function refreshEvents(btn){
 }
 
 // Merge weekly history + daily history into a combined timeline
+// Carries forward the last known weekly views data into daily entries for chart continuity
 function mergeHistory(weekly, daily){
   if(!daily||!daily.length) return weekly||[];
   if(!weekly||!weekly.length) return daily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:null,ytv:null,ttv:null,cpm:null}));
-  const lastWeeklyDate=weekly[weekly.length-1].d;
+  const lastWeekly=weekly[weekly.length-1];
+  const lastWeeklyDate=lastWeekly.d;
   const newDaily=daily.filter(d=>d.d>lastWeeklyDate);
-  const converted=newDaily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:null,ytv:null,ttv:null,cpm:null}));
+  // Carry forward last weekly views data into daily entries so charts don't stop abruptly
+  const converted=newDaily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:lastWeekly.wv||null,ytv:lastWeekly.ytv||null,ttv:lastWeekly.ttv||null,cpm:lastWeekly.cpm||null,estimated:true}));
   return [...weekly,...converted];
 }
 
@@ -1327,8 +1578,9 @@ function showCreatorDetail(name){
         <div style="font-family:JetBrains Mono;font-size:9px;color:rgba(255,255,255,0.3)">基准: ${c.ttBaseline?fmt(c.ttBaseline):'—'}</div>
       </div>
       <div style="background:rgba(255,255,255,0.02);border-radius:6px;padding:10px;text-align:center">
-        <div style="font-size:9px;color:rgba(255,255,255,0.35);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">月播放</div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.35);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">${monthlyPeriodLabel}播放</div>
         <div style="font-family:Rajdhani;font-size:22px;font-weight:700;color:rgba(255,255,255,0.9)">${fmt(c.monthlyViews)}</div>
+        <div style="font-family:JetBrains Mono;font-size:8px;color:rgba(255,255,255,0.2)">${monthlyPeriodFull}</div>
       </div>
       <div style="background:rgba(255,255,255,0.02);border-radius:6px;padding:10px;text-align:center">
         <div style="font-size:9px;color:rgba(255,255,255,0.35);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">月费</div>
@@ -1445,12 +1697,20 @@ function renderDetailChartsInner(hist,c){
         const viewsDates=viewsHist.map(h=>h.d.slice(5));
         const ch3=echarts.init(el3,null,{renderer:'svg'});
         const hasTTViews=viewsHist.some(h=>h.ttv!==null&&h.ttv!==undefined);
-        const viewsSeries=[{type:'line',name:'YouTube',data:viewsHist.map(h=>h.ytv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#ff5050'},itemStyle:{color:'#ff5050'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(255,80,80,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])},markArea:markAreaOpt||undefined}];
-        if(hasTTViews){viewsSeries.push({type:'line',name:'TikTok',data:viewsHist.map(h=>h.ttv||0),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#4db8d4'},itemStyle:{color:'#4db8d4'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(77,184,212,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}});}
+        // Split actual vs estimated data for visual styling
+        const estStart=viewsHist.findIndex(h=>h.estimated);
+        const ytData=viewsHist.map((h,i)=>({value:h.ytv||0,itemStyle:h.estimated?{borderType:'dashed',opacity:0.5}:undefined}));
+        const ttData=viewsHist.map((h,i)=>({value:h.ttv||0,itemStyle:h.estimated?{borderType:'dashed',opacity:0.5}:undefined}));
+        // Build markArea for estimated zone
+        const estMarkArea=estStart>0?{silent:true,itemStyle:{color:'rgba(255,255,255,0.02)',borderColor:'rgba(255,255,255,0.08)',borderWidth:1,borderType:'dashed'},label:{show:true,position:'insideTop',fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.2)',formatter:function(){return '估算'}},data:[[{xAxis:viewsDates[estStart]},{xAxis:viewsDates[viewsDates.length-1]}]]}:undefined;
+        const combinedMarkArea=markAreaOpt&&estMarkArea?{...markAreaOpt,data:[...(markAreaOpt.data||[]),...(estMarkArea.data||[])]}:markAreaOpt||estMarkArea||undefined;
+        const viewsSeries=[{type:'line',name:'YouTube',data:ytData,smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#ff5050'},itemStyle:{color:'#ff5050'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(255,80,80,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])},markArea:combinedMarkArea}];
+        if(hasTTViews){viewsSeries.push({type:'line',name:'TikTok',data:ttData,smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#4db8d4'},itemStyle:{color:'#4db8d4'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(77,184,212,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}});}
         ch3.setOption({
           tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
             const idx=p[0].dataIndex;const h=viewsHist[idx];
-            let s=`<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:4px">${h.d}</div>`;
+            const est=h.estimated?'<div style="font-size:9px;color:rgba(255,255,255,0.25);margin-bottom:3px">[估算值 - 沿用最后一周数据]</div>':'';
+            let s=`<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:4px">${h.d}</div>${est}`;
             s+=`<div style="color:#ff5050;margin-bottom:2px">YouTube: <b>${fmt(h.ytv||0)}</b></div>`;
             if(hasTTViews)s+=`<div style="color:#4db8d4;margin-bottom:2px">TikTok: <b>${fmt(h.ttv||0)}</b></div>`;
             s+=`<div style="color:rgba(255,255,255,0.5);border-top:1px solid rgba(255,255,255,0.1);padding-top:3px;margin-top:3px">合计: <b>${fmt(h.wv)}</b></div>`;
@@ -1470,28 +1730,51 @@ function renderDetailChartsInner(hist,c){
       }
     }
 
-    // CPM — only show entries with CPM data
+    // CPM — monthly settlement: group weeks by calendar month, compute CPM per month
     const el4=document.getElementById('detailCpmChart');
     if(el4){
-      const cpmHist=hist.filter(h=>h.cpm!==null&&h.cpm!==undefined);
-      if(cpmHist.length){
-        const cpmDates=cpmHist.map(h=>h.d.slice(5));
+      // Aggregate wv by calendar month (YYYY-MM)
+      const monthMap={};
+      hist.forEach(h=>{
+        if(h.wv===null||h.wv===undefined||h.estimated)return;
+        const ym=h.d.slice(0,7); // "YYYY-MM"
+        if(!monthMap[ym])monthMap[ym]={totalWv:0,weeks:0};
+        monthMap[ym].totalWv+=h.wv;
+        monthMap[ym].weeks++;
+      });
+      const months=Object.keys(monthMap).sort();
+      // Only include months with at least 2 weeks of data (avoid incomplete months misleading)
+      const validMonths=months.filter(ym=>monthMap[ym].weeks>=2);
+      if(validMonths.length){
+        const mFee=c.monthlyFee;
+        const cpmData=validMonths.map(ym=>{
+          const totalWv=monthMap[ym].totalWv;
+          // Scale weekly totals to monthly: (totalWv / weeks) * 4.33 ≈ monthly views
+          const monthlyWv=totalWv/monthMap[ym].weeks*4.33;
+          return +(mFee/monthlyWv*1000).toFixed(2);
+        });
+        const cpmLabels=validMonths.map(ym=>{
+          const parts=ym.split('-');
+          return parts[0].slice(2)+'/'+parts[1]; // "25/09" format
+        });
         const ch4=echarts.init(el4,null,{renderer:'svg'});
         ch4.setOption({
           tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
-            const idx=p[0].dataIndex;const h=cpmHist[idx];
-            return `<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:2px">${h.d}</div><div style="color:#f0a830">CPM: <b>$${h.cpm.toFixed?h.cpm.toFixed(2):h.cpm}</b></div>`;
+            const idx=p[0].dataIndex;const ym=validMonths[idx];
+            const info=monthMap[ym];
+            const monthlyWv=info.totalWv/info.weeks*4.33;
+            return `<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:2px">${ym}</div><div style="color:#f0a830">月度CPM: <b>$${p[0].value.toFixed(2)}</b></div><div style="font-size:10px;color:rgba(255,255,255,0.4)">月费: $${mFee} / 月播放: ~${fmt(Math.round(monthlyWv))}</div><div style="font-size:9px;color:rgba(255,255,255,0.25)">${info.weeks}周数据汇总</div>`;
           }},
           grid:{left:60,right:20,top:20,bottom:30},
-          xAxis:{type:'category',data:cpmDates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
-          yAxis:{type:'value',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>'$'+v.toFixed(2)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
-          series:[{type:'line',data:cpmHist.map(h=>h.cpm),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{width:2,color:'#f0a830'},itemStyle:{color:'#f0a830'},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(240,168,48,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}}],
+          xAxis:{type:'category',data:cpmLabels,axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.3)'},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
+          yAxis:{type:'value',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>'$'+v.toFixed(1)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
+          series:[{type:'bar',data:cpmData,barWidth:24,itemStyle:{borderRadius:[4,4,0,0],color:p=>{const v=p.value;if(v<1)return new echarts.graphic.LinearGradient(0,1,0,0,[{offset:0,color:'rgba(64,192,96,0.2)'},{offset:1,color:'#40c060'}]);if(v<3)return new echarts.graphic.LinearGradient(0,1,0,0,[{offset:0,color:'rgba(77,184,212,0.2)'},{offset:1,color:'#4db8d4'}]);return new echarts.graphic.LinearGradient(0,1,0,0,[{offset:0,color:'rgba(224,64,64,0.2)'},{offset:1,color:'#e04040'}]);}},label:{show:true,position:'top',fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.4)',formatter:p=>'$'+p.value.toFixed(2)}}],
           animationDuration:800
         });
         detailCharts.push(ch4);
         window.addEventListener('resize',()=>ch4.resize());
       } else {
-        el4.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无CPM数据</div>';
+        el4.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无足够CPM数据（需至少2周数据）</div>';
       }
     }
   },150);
@@ -1570,5 +1853,6 @@ function goBackFromDetail(){
 }
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v67327c56f0bb4ef8b305cae61679db8f1769101564043" integrity="sha512-rdcWY47ByXd76cbCFzznIcEaCN71jqkWBBqlwhF1SY7KubdLKZiEGeP7AyieKZlGP9hbY/MhGrwXzJC/HulNyg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
