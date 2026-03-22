@@ -21,6 +21,9 @@
     },
     "api/events.js": {
       "maxDuration": 10
+    },
+    "api/auth.js": {
+      "maxDuration": 5
     }
   }
 }
