@@ -1938,35 +1938,152 @@ function showEventDetail(eventIdx){
     ${evt.note?'<div style="font-size:12px;color:rgba(255,255,255,0.4);border-top:1px solid rgba(255,255,255,0.06);padding-top:10px">'+evt.note+'</div>':''}
   </div>`;
 
-  // Data review section
-  html+='<div style="font-family:Rajdhani;font-size:16px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:12px;letter-spacing:0.5px">数据复盘</div>';
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:24px">';
+  // Data review section — rich analysis with metrics + sentiment + evaluation
+  html+='<div style="font-family:Rajdhani;font-size:16px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:12px;letter-spacing:0.5px">活动复盘分析</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:16px;margin-bottom:24px">';
 
   evt.creators.forEach(name=>{
     const cr=creators.find(c=>c.name===name);
     const rc=cr?RC[cr.region]:'rgba(255,255,255,0.5)';
     const hist=weeklyHistory[name];
-    let before=null,after=null;
+
+    // --- Gather weekly data around event ---
+    let before=null,after=null,eventWeeks=[];
     if(hist){
       for(let i=0;i<hist.length;i++){
         if(hist[i].d<=evt.startDate)before=hist[i];
         if(!after&&hist[i].d>=evt.endDate)after=hist[i];
+        if(hist[i].d>=evt.startDate&&hist[i].d<=evt.endDate)eventWeeks.push(hist[i]);
       }
     }
+
+    // Compute historical averages (last 8 weeks before event)
+    let histAvgWv=null,histAvgYtv=null,histAvgTtv=null;
+    if(hist){
+      const priorWeeks=hist.filter(h=>h.d<evt.startDate).slice(-8);
+      if(priorWeeks.length>=2){
+        histAvgWv=Math.round(priorWeeks.reduce((s,h)=>s+(h.wv||0),0)/priorWeeks.length);
+        histAvgYtv=Math.round(priorWeeks.reduce((s,h)=>s+(h.ytv||0),0)/priorWeeks.length);
+        histAvgTtv=Math.round(priorWeeks.reduce((s,h)=>s+(h.ttv||0),0)/priorWeeks.length);
+      }
+    }
+
+    // Deltas
     const ytDelta=before&&after?(after.yt-before.yt):null;
     const ttDelta=before&&after&&after.tt&&before.tt?(after.tt-before.tt):null;
     const wvBefore=before?before.wv:null;
     const wvAfter=after?after.wv:null;
     const wvChange=wvBefore&&wvAfter?((wvAfter-wvBefore)/wvBefore*100).toFixed(1):null;
+    const wvVsAvg=histAvgWv&&wvAfter?(((wvAfter-histAvgWv)/histAvgWv)*100).toFixed(1):null;
 
-    const deltaHtml=before&&after?
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+
-        '<div style="background:rgba(255,255,255,0.02);border-radius:4px;padding:6px 10px;font-family:JetBrains Mono;font-size:11px"><span style="color:rgba(255,255,255,0.35)">YT订阅</span> <span style="color:'+(ytDelta>=0?'#40c060':'#e04040')+';font-weight:600">'+(ytDelta>=0?'+':'')+''+(ytDelta>999?fmt(ytDelta):ytDelta)+'</span></div>'+
-        (ttDelta!==null?'<div style="background:rgba(255,255,255,0.02);border-radius:4px;padding:6px 10px;font-family:JetBrains Mono;font-size:11px"><span style="color:rgba(255,255,255,0.35)">TT粉丝</span> <span style="color:'+(ttDelta>=0?'#40c060':'#e04040')+';font-weight:600">'+(ttDelta>=0?'+':'')+''+(ttDelta>999?fmt(ttDelta):ttDelta)+'</span></div>':'')+
-        (wvChange!==null?'<div style="background:rgba(255,255,255,0.02);border-radius:4px;padding:6px 10px;font-family:JetBrains Mono;font-size:11px"><span style="color:rgba(255,255,255,0.35)">播放量</span> <span style="color:'+(parseFloat(wvChange)>=0?'#4db8d4':'#e04040')+';font-weight:600">'+(parseFloat(wvChange)>=0?'+':'')+wvChange+'%</span></div>':'')+
-      '</div>':'<div style="font-size:11px;color:rgba(255,255,255,0.2);margin-top:8px">数据不足以计算变化</div>';
+    // Sentiment from creator config
+    const sentiment=cr?.sentiment||'neutral';
+    const sentimentScore=cr?.sentimentScore||50;
+    const sentimentNote=cr?.sentimentNote||'';
+    const sentColor=sentiment==='positive'?'#40c060':sentiment==='mixed'?'#f0a830':'rgba(255,255,255,0.4)';
+    const sentLabel=sentiment==='positive'?'积极':sentiment==='mixed'?'中性偏复杂':'中性';
 
-    html+='<div class="card" style="padding:16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-family:Rajdhani;font-size:16px;font-weight:700;color:'+rc+'">'+name+'</span><span class="region '+(regionCls[cr?.region]||'')+'" style="font-size:9px;padding:1px 5px">'+(cr?.region||'')+'</span></div>'+deltaHtml+'</div>';
+    // Event-period videos from content data
+    const allVids=liveContent||latestContent||[];
+    const eventVids=allVids.filter(v=>v.creator===name&&v.date&&v.date>=evt.startDate&&v.date<=evt.endDate);
+    const nearVids=eventVids.length?eventVids:allVids.filter(v=>v.creator===name).slice(0,3);
+    const vidCount=nearVids.length;
+    const posVids=nearVids.filter(v=>v.sentiment==='positive').length;
+    const mixVids=nearVids.filter(v=>v.sentiment==='mixed').length;
+
+    // --- Generate evaluation text ---
+    let evalParts=[];
+    // Growth assessment
+    if(ytDelta!==null){
+      if(ytDelta>500)evalParts.push('活动期间YouTube订阅增长'+fmt(ytDelta)+'，表现强劲');
+      else if(ytDelta>0)evalParts.push('YouTube订阅微增+'+(ytDelta>999?fmt(ytDelta):ytDelta)+'，增长平稳');
+      else if(ytDelta===0)evalParts.push('YouTube订阅无变化');
+      else evalParts.push('YouTube订阅流失'+(Math.abs(ytDelta)>999?fmt(Math.abs(ytDelta)):Math.abs(ytDelta))+'，需关注');
+    }
+    if(ttDelta!==null){
+      if(ttDelta>500)evalParts.push('TikTok粉丝增长'+fmt(ttDelta)+'，互动活跃');
+      else if(ttDelta>0)evalParts.push('TikTok粉丝+'+(ttDelta>999?fmt(ttDelta):ttDelta));
+      else if(ttDelta<0)evalParts.push('TikTok粉丝流失'+(Math.abs(ttDelta)>999?fmt(Math.abs(ttDelta)):Math.abs(ttDelta)));
+    }
+    // View performance vs history
+    if(wvVsAvg!==null){
+      const v=parseFloat(wvVsAvg);
+      if(v>15)evalParts.push('播放量高于近8周均值'+wvVsAvg+'%，活动带动效果明显');
+      else if(v>0)evalParts.push('播放量略高于近期均值（+'+wvVsAvg+'%）');
+      else if(v>-10)evalParts.push('播放量与近期持平');
+      else evalParts.push('播放量低于近期均值'+wvVsAvg+'%，活动触达不足');
+    }else if(wvChange!==null){
+      const v=parseFloat(wvChange);
+      if(v>15)evalParts.push('周播放量环比上升'+wvChange+'%');
+      else if(v<-15)evalParts.push('周播放量环比下降'+Math.abs(v).toFixed(1)+'%');
+    }
+    // Content output
+    if(vidCount>0){
+      evalParts.push('活动期间产出'+vidCount+'条内容'+(posVids>0?'，'+posVids+'条获正面反馈':''));
+      if(mixVids>0)evalParts.push(mixVids+'条内容引发争议讨论');
+    }
+    // Sentiment summary
+    if(sentimentNote){
+      evalParts.push(sentimentNote);
+    }
+    // Overall rating
+    let rating='⬜',ratingText='数据待积累',ratingColor='rgba(255,255,255,0.3)';
+    const score=(ytDelta!==null?(ytDelta>200?2:ytDelta>0?1:0):0)
+      +(ttDelta!==null?(ttDelta>200?2:ttDelta>0?1:0):0)
+      +(wvVsAvg!==null?(parseFloat(wvVsAvg)>10?2:parseFloat(wvVsAvg)>0?1:0):0)
+      +(sentimentScore>70?2:sentimentScore>50?1:0)
+      +(posVids>1?1:0);
+    if(score>=7){rating='🟢';ratingText='表现优秀';ratingColor='#40c060';}
+    else if(score>=4){rating='🟡';ratingText='表现良好';ratingColor='#f0a830';}
+    else if(score>=2){rating='🟠';ratingText='表现一般';ratingColor='#e08040';}
+    else if(ytDelta!==null||wvChange!==null){rating='🔴';ratingText='需要关注';ratingColor='#e05050';}
+
+    const evalText=evalParts.length?evalParts.join('。')+'。':'暂无足够数据生成分析。';
+
+    // --- Metric pill helper ---
+    function pill(label,val,color,suffix){
+      return '<div style="background:rgba(255,255,255,0.03);border-radius:6px;padding:8px 12px;min-width:80px">'+
+        '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:3px">'+label+'</div>'+
+        '<div style="font-family:JetBrains Mono;font-size:14px;font-weight:700;color:'+color+'">'+val+(suffix||'')+'</div></div>';
+    }
+    function deltaPill(label,val){
+      if(val===null)return pill(label,'—','rgba(255,255,255,0.15)');
+      const c=val>=0?'#40c060':'#e05050';
+      const prefix=val>=0?'+':'';
+      return pill(label,prefix+(Math.abs(val)>999?fmt(val):val),c);
+    }
+
+    // --- Build card HTML ---
+    let cardHtml='<div class="card" style="padding:20px">';
+    // Header row: name + region + rating
+    cardHtml+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">';
+    cardHtml+='<div style="display:flex;align-items:center;gap:8px"><span style="font-family:Rajdhani;font-size:20px;font-weight:700;color:'+rc+';cursor:pointer" onclick="showCreatorDetail(\''+name+'\')">'+name+'</span><span class="region '+(regionCls[cr?.region]||'')+'" style="font-size:9px;padding:1px 5px">'+(cr?.region||'')+'</span></div>';
+    cardHtml+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:13px">'+rating+'</span><span style="font-size:12px;font-weight:700;color:'+ratingColor+'">'+ratingText+'</span></div>';
+    cardHtml+='</div>';
+
+    // Metrics row
+    cardHtml+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">';
+    cardHtml+=deltaPill('YT 订阅变化',ytDelta);
+    if(cr?.ttUrl)cardHtml+=deltaPill('TT 粉丝变化',ttDelta);
+    if(wvAfter)cardHtml+=pill('活动周播放',fmt(wvAfter),'#4db8d4');
+    if(wvChange!==null)cardHtml+=pill('播放量变化',(parseFloat(wvChange)>=0?'+':'')+wvChange,parseFloat(wvChange)>=0?'#4db8d4':'#e05050','%');
+    if(histAvgWv)cardHtml+=pill('近8周均值',fmt(histAvgWv),'rgba(255,255,255,0.4)');
+    cardHtml+='</div>';
+
+    // Sentiment bar
+    cardHtml+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid rgba(255,255,255,0.04)">';
+    cardHtml+='<div style="font-size:11px;color:rgba(255,255,255,0.35);white-space:nowrap">舆情态度</div>';
+    cardHtml+='<div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+sentimentScore+'%;background:linear-gradient(90deg,'+sentColor+'80,'+sentColor+');border-radius:3px"></div></div>';
+    cardHtml+='<div style="font-size:12px;font-weight:700;color:'+sentColor+';white-space:nowrap">'+sentLabel+' '+sentimentScore+'</div>';
+    cardHtml+='</div>';
+
+    // Evaluation text
+    cardHtml+='<div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.7;padding:12px 14px;background:rgba(255,255,255,0.015);border-radius:6px;border-left:3px solid '+rc+'40">';
+    cardHtml+=evalText;
+    cardHtml+='</div>';
+
+    cardHtml+='</div>';
+    html+=cardHtml;
   });
   html+='</div>';
 
