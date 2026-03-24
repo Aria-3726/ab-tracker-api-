@@ -98,6 +98,17 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
 .plat-yt{background:rgba(255,50,50,0.12);color:#ff6060}
 .plat-tt{background:rgba(77,184,212,0.1);color:#4db8d4}
 
+/* LIVE STREAM */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.live-row{display:grid;grid-template-columns:100px 1fr 70px 70px 70px 80px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(42,42,53,0.4);font-size:12px}
+.live-row:last-child{border-bottom:none}
+.live-row .platform-tag{font-family:JetBrains Mono;font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px}
+.live-row .yt-tag{background:rgba(255,50,50,0.12);color:#ff6060}
+.live-row .tt-tag{background:rgba(77,184,212,0.1);color:#4db8d4}
+.live-stat{font-family:JetBrains Mono;font-size:12px;text-align:right}
+@media(max-width:640px){.live-row{grid-template-columns:80px 1fr 55px 55px;font-size:11px}
+  .live-row .hide-sm{display:none}}
+
 /* Date range picker */
 .dr-btn{padding:4px 10px;border-radius:3px;font-size:10px;font-family:'Noto Sans SC',sans-serif;font-weight:500;
   border:1px solid #2a2a35;background:transparent;color:rgba(255,255,255,0.4);cursor:pointer;transition:all 0.2s}
@@ -553,6 +564,17 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
         <div class="detail-chart" id="detailCpmChart"></div>
       </div>
     </div>
+    <!-- Live Stream History -->
+    <div class="card" style="padding:20px;margin-top:20px" id="liveStreamSection">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7)">直播记录</div>
+          <span id="liveNowBadge" style="display:none;font-family:Rajdhani;font-size:10px;font-weight:700;color:#e04040;background:rgba(224,64,64,0.12);border:1px solid rgba(224,64,64,0.25);padding:1px 8px;border-radius:3px;letter-spacing:1px;animation:pulse 2s infinite">● LIVE</span>
+        </div>
+        <span style="font-size:10px;color:rgba(255,255,255,0.3);font-family:JetBrains Mono">PCU=峰值 ACU=均值</span>
+      </div>
+      <div id="liveStreamContent" style="font-size:12px;color:rgba(255,255,255,0.4)">加载中...</div>
+    </div>
     <div style="margin-top:20px">
       <div class="card" style="padding:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -969,6 +991,36 @@ function renderCreatorCards(){
 }
 renderCreatorCards();
 
+// ====== GLOBAL LIVE STATUS CHECK ======
+let globalLiveCreators=new Set();
+function checkGlobalLiveStatus(){
+  fetch(API_LIVE_STATUS).then(r=>r.ok?r.json():null).then(data=>{
+    if(!data||!data.streams)return;
+    globalLiveCreators=new Set(data.streams.map(s=>s.creator));
+    // Update creator cards with live badges
+    document.querySelectorAll('.cr-card').forEach(card=>{
+      const nameEl=card.querySelector('[style*="font-size:16px"]');
+      if(!nameEl)return;
+      const name=nameEl.textContent.trim();
+      let badge=card.querySelector('.live-badge-mini');
+      if(globalLiveCreators.has(name)){
+        if(!badge){
+          badge=document.createElement('span');
+          badge.className='live-badge-mini';
+          badge.style.cssText='font-family:Rajdhani;font-size:9px;font-weight:700;color:#e04040;background:rgba(224,64,64,0.12);border:1px solid rgba(224,64,64,0.25);padding:0 5px;border-radius:3px;letter-spacing:1px;animation:pulse 2s infinite;margin-left:4px';
+          badge.textContent='LIVE';
+          nameEl.parentElement.appendChild(badge);
+        }
+      } else if(badge){
+        badge.remove();
+      }
+    });
+  }).catch(()=>{});
+}
+// Check live status on load and every 2 minutes
+checkGlobalLiveStatus();
+setInterval(checkGlobalLiveStatus,120000);
+
 // ====== CHARTS ======
 const cFont='JetBrains Mono';
 let chartInstances=[];
@@ -1238,6 +1290,8 @@ const API_CREATORS='/api/creators';
 const API_HISTORY='/api/history';
 const API_DAILY_HISTORY='/api/daily-history';
 const API_EVENTS='/api/events';
+const API_LIVE_STATUS='/api/live-status';
+const API_LIVE_HISTORY='/api/live-history';
 
 // ====== EVENTS ======
 let eventsData=null;
@@ -1848,8 +1902,87 @@ function showCreatorDetail(name){
   }
   // Hide sensitive data if not authenticated
   if(typeof hideAuthSensitive==='function')hideAuthSensitive();
+
+  // Fetch live stream data for this creator
+  fetchLiveStreamData(name);
 }
 
+// ====== LIVE STREAM DATA ======
+function fetchLiveStreamData(creatorName){
+  const container=document.getElementById('liveStreamContent');
+  const badge=document.getElementById('liveNowBadge');
+  if(!container)return;
+  container.innerHTML='<span style="color:rgba(255,255,255,0.3)">加载直播数据...</span>';
+  if(badge) badge.style.display='none';
+
+  Promise.all([
+    fetch(API_LIVE_STATUS).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(API_LIVE_HISTORY+'?creator='+encodeURIComponent(creatorName)+'&limit=20').then(r=>r.ok?r.json():null).catch(()=>null)
+  ]).then(([statusJson,historyJson])=>{
+    const liveNow=(statusJson&&statusJson.streams||[]).filter(s=>s.creator===creatorName);
+    const pastStreams=(historyJson&&historyJson.streams||[]);
+
+    if(liveNow.length===0&&pastStreams.length===0){
+      container.innerHTML='<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:20px;text-align:center">暂无直播记录</div>';
+      return;
+    }
+
+    let html='';
+
+    // Currently live
+    if(liveNow.length>0){
+      if(badge) badge.style.display='inline-block';
+      html+='<div style="margin-bottom:12px">';
+      for(const s of liveNow){
+        const platClass=s.platform==='youtube'?'yt-tag':'tt-tag';
+        const platLabel=s.platform==='youtube'?'YouTube':'TikTok';
+        const elapsed=Math.round((Date.now()-new Date(s.startTime).getTime())/60000);
+        const durStr=elapsed>=60?Math.floor(elapsed/60)+'h'+String(elapsed%60).padStart(2,'0')+'m':elapsed+'m';
+        html+=`<div class="live-row" style="background:rgba(224,64,64,0.04);border:1px solid rgba(224,64,64,0.15);border-radius:6px;padding:10px;margin-bottom:6px">
+          <span class="platform-tag ${platClass}">${platLabel}</span>
+          <span style="color:rgba(255,255,255,0.85);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.title||'直播中'}</span>
+          <span class="live-stat" style="color:#e04040">${fmtN(s.currentViewers)}</span>
+          <span class="live-stat" style="color:#f0a830">${fmtN(s.pcu)}</span>
+          <span class="live-stat hide-sm" style="color:rgba(255,255,255,0.5)">—</span>
+          <span class="live-stat hide-sm" style="color:rgba(255,255,255,0.5)">${durStr}</span>
+        </div>`;
+      }
+      html+='</div>';
+    }
+
+    // Past streams
+    if(pastStreams.length>0){
+      html+=`<div class="live-row" style="font-size:10px;color:rgba(255,255,255,0.35);font-family:Rajdhani;font-weight:600;letter-spacing:1px;border-bottom:1px solid rgba(42,42,53,0.6);padding-bottom:6px">
+        <span>日期</span><span>标题</span><span style="text-align:right">PCU</span><span style="text-align:right">ACU</span><span class="hide-sm" style="text-align:right">采样</span><span class="hide-sm" style="text-align:right">时长</span>
+      </div>`;
+      for(const s of pastStreams){
+        const platClass=s.platform==='youtube'?'yt-tag':'tt-tag';
+        const platLabel=s.platform==='youtube'?'YT':'TT';
+        const dateStr=s.startTime?s.startTime.slice(0,10):'—';
+        const durStr=s.durationMin?(s.durationMin>=60?Math.floor(s.durationMin/60)+'h'+String(s.durationMin%60).padStart(2,'0')+'m':s.durationMin+'m'):'—';
+        html+=`<div class="live-row">
+          <span style="color:rgba(255,255,255,0.5);font-family:JetBrains Mono;font-size:11px"><span class="platform-tag ${platClass}" style="margin-right:4px">${platLabel}</span>${dateStr.slice(5)}</span>
+          <span style="color:rgba(255,255,255,0.75);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.title||'—'}</span>
+          <span class="live-stat" style="color:#f0a830;font-weight:600">${fmtN(s.pcu)}</span>
+          <span class="live-stat" style="color:rgba(255,255,255,0.7)">${fmtN(s.acu)}</span>
+          <span class="live-stat hide-sm" style="color:rgba(255,255,255,0.4)">${s.samples||'—'}</span>
+          <span class="live-stat hide-sm" style="color:rgba(255,255,255,0.5)">${durStr}</span>
+        </div>`;
+      }
+    }
+
+    container.innerHTML=html;
+  }).catch(()=>{
+    container.innerHTML='<div style="color:rgba(255,255,255,0.25);font-size:12px">直播数据加载失败</div>';
+  });
+}
+
+function fmtN(n){
+  if(n===null||n===undefined)return '—';
+  if(n>=1000000)return (n/1000000).toFixed(1)+'M';
+  if(n>=1000)return (n/1000).toFixed(1)+'K';
+  return String(n);
+}
 function renderDetailChartsInner(hist,c){
   if(!hist||!hist.length)return;
   const dates=hist.map(h=>h.d.slice(5));
