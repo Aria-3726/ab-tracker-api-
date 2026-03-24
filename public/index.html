@@ -1516,6 +1516,38 @@ function mergeHistory(weekly, daily){
   const lastWeekly=weekly[weekly.length-1];
   const lastWeeklyDate=lastWeekly.d;
   const newDaily=daily.filter(d=>d.d>lastWeeklyDate);
+
+  // Step 2b: Interpolate gap between last weekly entry and first daily entry
+  if(newDaily.length>0){
+    const firstDailyDate=newDaily[0].d;
+    const gapDays=daysBetween(lastWeeklyDate,firstDailyDate);
+    if(gapDays>1){
+      const fd=newDaily[0];
+      const lastWkYtvDaily=lastWeekly.ytv!==undefined?Math.round((lastWeekly.ytv||0)/7):null;
+      const lastWkTtvDaily=lastWeekly.ttv!==undefined?Math.round((lastWeekly.ttv||0)/7):null;
+      const firstDYtv=fd.ytv!==undefined&&fd.ytv!==null?fd.ytv:lastWkYtvDaily;
+      const firstDTtv=fd.ttv!==undefined&&fd.ttv!==null?fd.ttv:lastWkTtvDaily;
+      for(let di=1;di<gapDays;di++){
+        const t=di/gapDays;
+        const dateStr=addDays(lastWeeklyDate,di);
+        const rng=miniRng(dateStr.split('-').reduce((a,b)=>a*100+parseInt(b),0));
+        const variation=0.85+rng()*0.30;
+        const iYtv=lastWkYtvDaily!==null&&firstDYtv!==null?Math.round(lerp(lastWkYtvDaily,firstDYtv,t)*variation):null;
+        const iTtv=lastWkTtvDaily!==null&&firstDTtv!==null?Math.round(lerp(lastWkTtvDaily,firstDTtv,t)*variation):null;
+        dailyFromWeekly.push({
+          d:dateStr,
+          yt:lerp(lastWeekly.yt,fd.yt,t),
+          tt:lerp(lastWeekly.tt,fd.tt,t),
+          wv:iYtv!==null?(iYtv+(iTtv||0)):null,
+          ytv:iYtv,
+          ttv:iTtv,
+          cpm:lastWeekly.cpm||null,
+          interpolated:true
+        });
+      }
+    }
+  }
+
   const converted=newDaily.map(d=>{
     const hasViews=d.ytv!==undefined&&d.ytv!==null;
     const hasTTViews=d.ttv!==undefined&&d.ttv!==null;
@@ -2000,7 +2032,7 @@ function renderDetailChartsInner(hist,c){
 
   // Common chart options
   const showSymbol=hist.length<=60;
-  function lineOpt(title,data,color,yFmt){
+  function lineOpt(title,data,color,yFmt,yMin){
     const seriesItem={type:'line',data:data,smooth:true,symbol:'circle',symbolSize:showSymbol?4:2,showSymbol:showSymbol,lineStyle:{width:2,color:color},itemStyle:{color:color},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:color.replace(')',',0.15)').replace('rgb','rgba')},{offset:1,color:'rgba(0,0,0,0)'}])}};
     if(markAreaOpt)seriesItem.markArea=markAreaOpt;
     return {
@@ -2010,7 +2042,7 @@ function renderDetailChartsInner(hist,c){
       }},
       grid:{left:60,right:20,top:20,bottom:30},
       xAxis:{type:'category',data:dates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45,interval:Math.max(0,Math.floor(dates.length/15)-1)},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
-      yAxis:{type:'value',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:typeof yFmt==='function'?yFmt:v=>fmt(v)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
+      yAxis:{type:'value',min:yMin||undefined,axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:typeof yFmt==='function'?yFmt:v=>fmt(v)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
       series:[seriesItem],
       animationDuration:800
     };
@@ -2021,7 +2053,7 @@ function renderDetailChartsInner(hist,c){
     const el1=document.getElementById('detailYtChart');
     if(!el1)return;
     const ch1=echarts.init(el1,null,{renderer:'svg'});
-    ch1.setOption(lineOpt('YT订阅',hist.map(h=>h.yt),'#ff5050',v=>fmt(v)));
+    ch1.setOption(lineOpt('YT订阅',hist.map(h=>h.yt),'#ff5050',v=>fmt(v),'dataMin'));
     detailCharts.push(ch1);
     window.addEventListener('resize',()=>ch1.resize());
 
@@ -2030,7 +2062,7 @@ function renderDetailChartsInner(hist,c){
     const hasTT=hist.some(h=>h.tt!==null);
     if(el2&&hasTT){
       const ch2=echarts.init(el2,null,{renderer:'svg'});
-      ch2.setOption(lineOpt('TT粉丝',hist.map(h=>h.tt),'#4db8d4',v=>fmt(v)));
+      ch2.setOption(lineOpt('TT粉丝',hist.map(h=>h.tt),'#4db8d4',v=>fmt(v),'dataMin'));
       detailCharts.push(ch2);
       window.addEventListener('resize',()=>ch2.resize());
     } else if(el2){
