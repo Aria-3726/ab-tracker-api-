@@ -23,11 +23,18 @@ jobs:
         env:
           YT_API_KEY: ${{ secrets.YT_API_KEY }}
 
+      - name: Export live stream history from Redis
+        run: node scripts/export-live-history.js
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+        continue-on-error: true
+
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/daily-history.json
+          git add data/daily-history.json data/live-history.json
           git diff --staged --quiet && echo "No changes to commit" && exit 0
           git commit -m "chore: daily snapshot $(date -u +%Y-%m-%d)"
           git push
