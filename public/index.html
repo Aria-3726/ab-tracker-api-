@@ -991,36 +991,6 @@ function renderCreatorCards(){
 }
 renderCreatorCards();
 
-// ====== GLOBAL LIVE STATUS CHECK ======
-let globalLiveCreators=new Set();
-function checkGlobalLiveStatus(){
-  fetch(API_LIVE_STATUS).then(r=>r.ok?r.json():null).then(data=>{
-    if(!data||!data.streams)return;
-    globalLiveCreators=new Set(data.streams.map(s=>s.creator));
-    // Update creator cards with live badges
-    document.querySelectorAll('.cr-card').forEach(card=>{
-      const nameEl=card.querySelector('[style*="font-size:16px"]');
-      if(!nameEl)return;
-      const name=nameEl.textContent.trim();
-      let badge=card.querySelector('.live-badge-mini');
-      if(globalLiveCreators.has(name)){
-        if(!badge){
-          badge=document.createElement('span');
-          badge.className='live-badge-mini';
-          badge.style.cssText='font-family:Rajdhani;font-size:9px;font-weight:700;color:#e04040;background:rgba(224,64,64,0.12);border:1px solid rgba(224,64,64,0.25);padding:0 5px;border-radius:3px;letter-spacing:1px;animation:pulse 2s infinite;margin-left:4px';
-          badge.textContent='LIVE';
-          nameEl.parentElement.appendChild(badge);
-        }
-      } else if(badge){
-        badge.remove();
-      }
-    });
-  }).catch(()=>{});
-}
-// Check live status on load and every 2 minutes
-checkGlobalLiveStatus();
-setInterval(checkGlobalLiveStatus,120000);
-
 // ====== CHARTS ======
 const cFont='JetBrains Mono';
 let chartInstances=[];
@@ -1292,6 +1262,34 @@ const API_DAILY_HISTORY='/api/daily-history';
 const API_EVENTS='/api/events';
 const API_LIVE_STATUS='/api/live-status';
 const API_LIVE_HISTORY='/api/live-history';
+
+// ====== GLOBAL LIVE STATUS CHECK ======
+let globalLiveCreators=new Set();
+function checkGlobalLiveStatus(){
+  fetch(API_LIVE_STATUS).then(r=>r.ok?r.json():null).then(data=>{
+    if(!data||!data.streams)return;
+    globalLiveCreators=new Set(data.streams.map(s=>s.creator));
+    document.querySelectorAll('.cr-card').forEach(card=>{
+      const nameEl=card.querySelector('[style*="font-size:16px"]');
+      if(!nameEl)return;
+      const name=nameEl.textContent.trim();
+      let badge=card.querySelector('.live-badge-mini');
+      if(globalLiveCreators.has(name)){
+        if(!badge){
+          badge=document.createElement('span');
+          badge.className='live-badge-mini';
+          badge.style.cssText='font-family:Rajdhani;font-size:9px;font-weight:700;color:#e04040;background:rgba(224,64,64,0.12);border:1px solid rgba(224,64,64,0.25);padding:0 5px;border-radius:3px;letter-spacing:1px;animation:pulse 2s infinite;margin-left:4px';
+          badge.textContent='LIVE';
+          nameEl.parentElement.appendChild(badge);
+        }
+      } else if(badge){
+        badge.remove();
+      }
+    });
+  }).catch(()=>{});
+}
+checkGlobalLiveStatus();
+setInterval(checkGlobalLiveStatus,120000);
 
 // ====== EVENTS ======
 let eventsData=null;
