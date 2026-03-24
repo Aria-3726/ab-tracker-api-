@@ -344,7 +344,7 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
     </div>
     <div class="sec-desc">签约主播在YouTube和TikTok上发布的最新Arena Breakout相关内容，包含发布日期、播放数、互动数、评论区舆情及跳转链接。点击卡片可直接跳转至视频页面。</div>
 
-    <div id="feedStats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+    <div id="feedStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
       <div class="card" style="padding:14px;text-align:center">
         <div class="stat-num" id="feedStatVideos" style="font-family:Rajdhani;font-size:28px;font-weight:700;color:rgba(255,255,255,0.9)">—</div>
         <div style="font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">今日新增视频</div>
@@ -358,12 +358,18 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
         <div class="stat-num" id="feedStatCreators" style="font-family:Rajdhani;font-size:28px;font-weight:700;color:rgba(255,255,255,0.9)">—</div>
         <div style="font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">今日发布主播</div>
       </div>
+      <div class="card" style="padding:14px;text-align:center;position:relative;overflow:hidden" id="feedLiveCard">
+        <div class="stat-num" id="feedStatLive" style="font-family:Rajdhani;font-size:28px;font-weight:700;color:#e04040">—</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;font-family:JetBrains Mono;letter-spacing:1px">今日直播场次</div>
+        <div id="feedStatLiveSub" style="font-family:JetBrains Mono;font-size:9px;color:rgba(255,255,255,0.3);margin-top:2px"></div>
+      </div>
     </div>
 
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px" id="feedFilters">
       <button class="filter-btn on" onclick="filterFeed('all',this)">全部</button>
       <button class="filter-btn" onclick="filterFeed('youtube',this)">YouTube</button>
       <button class="filter-btn" onclick="filterFeed('tiktok',this)">TikTok</button>
+      <button class="filter-btn" onclick="filterFeed('live',this)" style="color:#e04040;border-color:rgba(224,64,64,0.3)">🔴 直播</button>
       <button class="filter-btn" onclick="filterFeed('EN',this)">EN</button>
       <button class="filter-btn" onclick="filterFeed('ES',this)">ES</button>
       <button class="filter-btn" onclick="filterFeed('JA',this)">JA</button>
@@ -845,52 +851,138 @@ renderOverviewTable();
 const feedBox=document.getElementById('feedBox');
 let currentFeedFilter='all';
 let liveContent=null;
+let feedLiveStreams=[];  // live + recent streams for feed
+let feedLiveNow=[];     // currently live streams
+
+// Fetch live stream data for the feed page
+function fetchFeedLiveData(){
+  Promise.all([
+    fetch(API_LIVE_STATUS).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(API_LIVE_HISTORY+'?limit=50').then(r=>r.ok?r.json():null).catch(()=>null)
+  ]).then(([statusJson,historyJson])=>{
+    feedLiveNow=(statusJson&&statusJson.streams)||[];
+    const pastStreams=(historyJson&&historyJson.streams)||[];
+    // Merge into feed-compatible items
+    feedLiveStreams=[];
+    // Currently live → feed items
+    for(const s of feedLiveNow){
+      const c=creators.find(cr=>cr.name===s.creator);
+      feedLiveStreams.push({
+        type:'live-now',creator:s.creator,region:c?c.region:'',platform:s.platform,
+        title:s.title||'直播中',date:s.startTime?s.startTime.split('T')[0]:'',
+        pcu:s.pcu,acu:null,currentViewers:s.currentViewers,durationMin:null,
+        startTime:s.startTime,streamId:s.streamId
+      });
+    }
+    // Past streams → feed items (today only for stats, but show recent in feed)
+    for(const s of pastStreams){
+      const c=creators.find(cr=>cr.name===s.creator);
+      feedLiveStreams.push({
+        type:'live-ended',creator:s.creator,region:c?c.region:'',platform:s.platform,
+        title:s.title||'直播回放',date:s.startTime?s.startTime.split('T')[0]:'',
+        pcu:s.pcu,acu:s.acu,currentViewers:null,durationMin:s.durationMin,
+        startTime:s.startTime,streamId:s.streamId
+      });
+    }
+    renderFeed(currentFeedFilter);
+    updateFeedStats();
+  });
+}
+fetchFeedLiveData();
+
+function renderLiveCard(item){
+  const isLive=item.type==='live-now';
+  const platClass=item.platform==='youtube'?'plat-yt':'plat-tt';
+  const platLabel=item.platform==='youtube'?'YouTube':'TikTok';
+  const platIcon=item.platform==='youtube'?ytSvg:ttSvg;
+  const rc=RC[item.region]||'#c8a44e';
+  const durStr=item.durationMin?(item.durationMin>=60?Math.floor(item.durationMin/60)+'h'+String(item.durationMin%60).padStart(2,'0')+'m':item.durationMin+'m'):'';
+  const startStr=item.startTime?item.startTime.split('T')[1]?.slice(0,5)||'':'';
+
+  return `<div class="feed-item" style="border-color:${isLive?'rgba(224,64,64,0.3)':'rgba(168,100,220,0.2)'};background:${isLive?'linear-gradient(135deg,rgba(224,64,64,0.06),#16161e)':'linear-gradient(135deg,rgba(168,100,220,0.04),#16161e)'}">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-family:Rajdhani;font-size:12px;font-weight:700;color:${rc}">${item.creator}</span>
+        <span class="region ${regionCls[item.region]||''}" style="font-size:8px;padding:1px 4px">${item.region}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        ${isLive?'<span style="font-family:Rajdhani;font-size:9px;font-weight:700;color:#e04040;background:rgba(224,64,64,0.15);border:1px solid rgba(224,64,64,0.3);padding:0 6px;border-radius:3px;letter-spacing:1px;animation:pulse 2s infinite">● LIVE</span>':'<span style="font-family:Rajdhani;font-size:9px;font-weight:600;color:rgba(168,100,220,0.8);background:rgba(168,100,220,0.1);border:1px solid rgba(168,100,220,0.2);padding:0 6px;border-radius:3px;letter-spacing:1px">已结束</span>'}
+        <span class="plat ${platClass}">${platIcon} ${platLabel}</span>
+      </div>
+    </div>
+    <p style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.4;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${item.title}</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;font-family:JetBrains Mono;font-size:10px">
+      ${item.date?`<span style="color:rgba(255,255,255,0.5)">📅 ${item.date}${startStr?' '+startStr:''}</span>`:''}
+      ${isLive&&item.currentViewers!==null?`<span style="color:#e04040;font-weight:600">👁 ${fmtN(item.currentViewers)} 观看中</span>`:''}
+      ${item.pcu?`<span style="color:#f0a830">PCU ${fmtN(item.pcu)}</span>`:''}
+      ${item.acu?`<span style="color:rgba(255,255,255,0.6)">ACU ${fmtN(item.acu)}</span>`:''}
+      ${durStr?`<span style="color:rgba(255,255,255,0.5)">⏱ ${durStr}</span>`:''}
+    </div>
+  </div>`;
+}
+
 function renderFeed(filter){
   currentFeedFilter=filter;
-  // Use live API data if available, otherwise fall back to static
   let items=liveContent||latestContent;
-  if(filter==='youtube')items=items.filter(i=>i.platform==='youtube');
-  else if(filter==='tiktok')items=items.filter(i=>i.platform==='tiktok');
-  else if(['EN','ES','JA','TH','ID'].includes(filter))items=items.filter(i=>i.region===filter);
-  feedBox.innerHTML=items.map(item=>{
-    const pc=item.platform==='youtube'?'plat-yt':'plat-tt';
-    const pl=item.platform==='youtube'?'YouTube':'TikTok';
-    const pi=item.platform==='youtube'?ytSvg:ttSvg;
-    const sc=item.sentiment==='positive'?'#40c060':item.sentiment==='mixed'?'#f0a830':'rgba(255,255,255,0.4)';
-    const sl=item.sentiment==='positive'?'正面':item.sentiment==='mixed'?'观察':'中性';
-    const dateStr=item.date||(liveContent?'近期':'');
-    return `<div class="feed-item"><a href="${item.url}" target="_blank" rel="noopener">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-family:Rajdhani;font-size:12px;font-weight:700;color:${RC[item.region]}">${item.creator}</span>
-          <span class="region ${regionCls[item.region]}" style="font-size:8px;padding:1px 4px">${item.region}</span>
+  let liveItems=feedLiveStreams||[];
+
+  if(filter==='youtube'){items=items.filter(i=>i.platform==='youtube');liveItems=liveItems.filter(i=>i.platform==='youtube');}
+  else if(filter==='tiktok'){items=items.filter(i=>i.platform==='tiktok');liveItems=liveItems.filter(i=>i.platform==='tiktok');}
+  else if(filter==='live'){items=[];} // Only show live streams
+  else if(['EN','ES','JA','TH','ID'].includes(filter)){items=items.filter(i=>i.region===filter);liveItems=liveItems.filter(i=>i.region===filter);}
+
+  // Build HTML: live streams first (currently live on top), then video content
+  let html='';
+
+  // Currently live streams always on top
+  const nowLive=liveItems.filter(i=>i.type==='live-now');
+  const endedLive=(filter==='live')?liveItems.filter(i=>i.type==='live-ended'):liveItems.filter(i=>i.type==='live-ended').slice(0,6);
+
+  for(const item of nowLive) html+=renderLiveCard(item);
+  for(const item of endedLive) html+=renderLiveCard(item);
+
+  if(filter!=='live'){
+    html+=items.map(item=>{
+      const pc=item.platform==='youtube'?'plat-yt':'plat-tt';
+      const pl=item.platform==='youtube'?'YouTube':'TikTok';
+      const pi=item.platform==='youtube'?ytSvg:ttSvg;
+      const sc=item.sentiment==='positive'?'#40c060':item.sentiment==='mixed'?'#f0a830':'rgba(255,255,255,0.4)';
+      const sl=item.sentiment==='positive'?'正面':item.sentiment==='mixed'?'观察':'中性';
+      const dateStr=item.date||(liveContent?'近期':'');
+      return `<div class="feed-item"><a href="${item.url}" target="_blank" rel="noopener">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-family:Rajdhani;font-size:12px;font-weight:700;color:${RC[item.region]}">${item.creator}</span>
+            <span class="region ${regionCls[item.region]}" style="font-size:8px;padding:1px 4px">${item.region}</span>
+          </div>
+          <span class="plat ${pc}">${pi} ${pl}</span>
         </div>
-        <span class="plat ${pc}">${pi} ${pl}</span>
-      </div>
-      <p style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.4;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${item.title}</p>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;font-family:JetBrains Mono;font-size:10px">
-        ${dateStr?`<span style="color:rgba(255,255,255,0.5)">📅 ${dateStr}</span>`:''}
-        <span style="color:rgba(255,255,255,0.7)">▶ ${item.views}</span>
-        ${item.likes?`<span style="color:#e05050">♥ ${item.likes}</span>`:''}
-        ${item.comments?`<span style="color:#4db8d4">💬 ${item.comments}</span>`:''}
-      </div>
-      ${item.sentiment?`<div style="display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px solid rgba(42,42,53,0.5)">
-        <span style="width:5px;height:5px;border-radius:50%;background:${sc}"></span>
-        <span style="font-size:10px;color:${sc};font-weight:600">${sl}</span>
-        <span style="font-size:10px;color:rgba(255,255,255,0.35);flex:1">${item.sentimentNote||''}</span>
-      </div>`:''}
-    </a></div>`;
-  }).join('');
+        <p style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.4;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${item.title}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;font-family:JetBrains Mono;font-size:10px">
+          ${dateStr?`<span style="color:rgba(255,255,255,0.5)">📅 ${dateStr}</span>`:''}
+          <span style="color:rgba(255,255,255,0.7)">▶ ${item.views}</span>
+          ${item.likes?`<span style="color:#e05050">♥ ${item.likes}</span>`:''}
+          ${item.comments?`<span style="color:#4db8d4">💬 ${item.comments}</span>`:''}
+        </div>
+        ${item.sentiment?`<div style="display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px solid rgba(42,42,53,0.5)">
+          <span style="width:5px;height:5px;border-radius:50%;background:${sc}"></span>
+          <span style="font-size:10px;color:${sc};font-weight:600">${sl}</span>
+          <span style="font-size:10px;color:rgba(255,255,255,0.35);flex:1">${item.sentimentNote||''}</span>
+        </div>`:''}
+      </a></div>`;
+    }).join('');
+  }
+
+  if(!html) html='<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:20px;text-align:center;grid-column:1/-1">暂无数据</div>';
+  feedBox.innerHTML=html;
   updateFeedStats();
 }
 function updateFeedStats(){
   const allItems=liveContent||latestContent;
   const today=new Date().toISOString().split('T')[0];
-  // Try today first; if no items today, show stats for all available items (labeled as "近期")
   let todayItems=allItems.filter(i=>i.date&&i.date.startsWith(today));
   let label='今日';
   if(todayItems.length===0){
-    // Fall back to all items, show as "近期" stats
     todayItems=allItems;
     label='近期';
   }
@@ -898,7 +990,6 @@ function updateFeedStats(){
   const ttCount=todayItems.filter(i=>i.platform==='tiktok').length;
   document.getElementById('feedStatVideos').textContent=todayItems.length;
   document.getElementById('feedStatVideosSub').textContent=`YT: ${ytCount} / TT: ${ttCount}`;
-  // Parse views: handle "8.9K", "~600", "42K" etc
   const totalViews=todayItems.reduce((s,i)=>{
     const raw=i.viewsRaw||parseFmtNum(String(i.views).replace(/[~,]/g,''));
     return s+(raw||0);
@@ -906,13 +997,43 @@ function updateFeedStats(){
   document.getElementById('feedStatViews').textContent=totalViews>0?fmt(totalViews):'—';
   const uniqueCreators=new Set(todayItems.map(i=>i.creator));
   document.getElementById('feedStatCreators').textContent=uniqueCreators.size||'—';
-  // Update labels if showing "近期" stats
   const labels=document.querySelectorAll('#feedStats div[style*="text-transform"]');
   if(labels.length>=3){
     labels[0].textContent=label+'新增视频';
     labels[1].textContent=label+'播放量';
     labels[2].textContent=label+'发布主播';
   }
+
+  // Live stream stats
+  const liveNow=feedLiveNow||[];
+  const allLive=feedLiveStreams||[];
+  const todayLive=allLive.filter(s=>s.date===today);
+  const todayLiveYt=todayLive.filter(s=>s.platform==='youtube').length;
+  const todayLiveTt=todayLive.filter(s=>s.platform==='tiktok').length;
+  const totalLiveCount=todayLive.length||allLive.length;
+  const liveLabel=todayLive.length>0?'今日':'累计';
+  const displayLive=todayLive.length>0?todayLive:allLive;
+  const displayYt=todayLive.length>0?todayLiveYt:allLive.filter(s=>s.platform==='youtube').length;
+  const displayTt=todayLive.length>0?todayLiveTt:allLive.filter(s=>s.platform==='tiktok').length;
+
+  const liveStatEl=document.getElementById('feedStatLive');
+  const liveSubEl=document.getElementById('feedStatLiveSub');
+  const liveCardEl=document.getElementById('feedLiveCard');
+  if(liveStatEl){
+    if(liveNow.length>0){
+      liveStatEl.innerHTML=`<span style="animation:pulse 2s infinite">${liveNow.length} LIVE</span>`;
+      liveStatEl.style.color='#e04040';
+    } else {
+      liveStatEl.textContent=displayLive.length||'0';
+      liveStatEl.style.color=displayLive.length>0?'rgba(255,255,255,0.9)':'rgba(255,255,255,0.3)';
+    }
+  }
+  if(liveSubEl) liveSubEl.textContent=`YT: ${displayYt} / TT: ${displayTt}`;
+  // Update live label
+  if(labels.length>=4) labels[3].textContent=liveLabel+'直播场次';
+  // Max PCU across today's streams
+  const maxPcu=displayLive.reduce((m,s)=>Math.max(m,s.pcu||0),0);
+  if(liveSubEl&&maxPcu>0) liveSubEl.textContent+=` · PCU ${fmtN(maxPcu)}`;
 }
 function filterFeed(f,btn){
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));
