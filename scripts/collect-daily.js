@@ -12,7 +12,8 @@
  *   tt           — TikTok follower count (null if no handle)
  *   ytTotalViews — cumulative YouTube channel views (for delta calc)
  *   ytv          — daily YouTube views (delta from previous day)
- *   ttv          — TikTok recent video views (sum of embed playCount)
+ *   ttTotalViews — cumulative TikTok video plays (for delta calc)
+ *   ttv          — daily TikTok views (delta from previous day)
  *   wv           — total daily views (ytv + ttv)
  *
  * Usage: YT_API_KEY=xxx node scripts/collect-daily.js
@@ -192,9 +193,21 @@ async function main() {
       }
     }
 
-    // TikTok daily views: use the sum of recent video playCount from embed
-    // This is an approximation — it reflects recent video activity
-    const ttDailyViews = ttRecentViews || 0;
+    // TikTok daily views: compute delta from previous day's ttTotalViews
+    // (mirrors YouTube approach — store cumulative total, compute daily delta)
+    const ttTotalViews = ttRecentViews;  // sum of playCount from embed (cumulative)
+    let ttDailyViews = 0;
+    if (prevEntries.length > 0 && ttTotalViews !== null && ttTotalViews > 0) {
+      const prev = prevEntries[prevEntries.length - 1];
+      if (prev.ttTotalViews) {
+        const delta = ttTotalViews - prev.ttTotalViews;
+        // Only use positive deltas (negative means embed showed different videos)
+        if (delta >= 0) {
+          ttDailyViews = delta;
+        }
+      }
+      // If no previous ttTotalViews, first day of delta tracking — ttv stays 0
+    }
 
     // Idempotent: remove existing entry for today
     daily[c.name] = prevEntries;
@@ -206,6 +219,7 @@ async function main() {
       tt: ttFollowers,
       ytTotalViews: ytTotalViews,  // always store for next-day delta
       ytv: ytDailyViews,           // YouTube daily views
+      ttTotalViews: ttTotalViews,  // always store for next-day delta
       ttv: ttDailyViews,           // TikTok daily views
       wv: ytDailyViews + ttDailyViews, // total daily views
     };
