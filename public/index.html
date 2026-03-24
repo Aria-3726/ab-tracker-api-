@@ -857,8 +857,8 @@ let feedLiveNow=[];     // currently live streams
 // Fetch live stream data for the feed page
 function fetchFeedLiveData(){
   Promise.all([
-    fetch(API_LIVE_STATUS).then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(API_LIVE_HISTORY+'?limit=50').then(r=>r.ok?r.json():null).catch(()=>null)
+    fetch('/api/live-status').then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch('/api/live-history?limit=50').then(r=>r.ok?r.json():null).catch(()=>null)
   ]).then(([statusJson,historyJson])=>{
     feedLiveNow=(statusJson&&statusJson.streams)||[];
     const pastStreams=(historyJson&&historyJson.streams)||[];
