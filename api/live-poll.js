@@ -35,24 +35,26 @@ const K = {
 };
 
 // ============================================================
-// YOUTUBE: Parse RSS feed for recent video IDs (free, no quota)
+// YOUTUBE: Fetch recent video IDs via playlistItems API
+// Each channel's uploads playlist = channel ID with UC→UU prefix
+// Cost: 1 quota unit per call, 12 channels = 12 units
 // ============================================================
-async function fetchYouTubeRSS(channelId) {
-  try {
-    const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-    const res = await fetch(url, { timeout: 8000 });
-    const xml = await res.text();
+async function fetchRecentVideoIds(channelId) {
+  if (!YT_API_KEY) return [];
+  // Convert channel ID to uploads playlist ID: UC... → UU...
+  const playlistId = 'UU' + channelId.substring(2);
+  const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${playlistId}&maxResults=5&key=${YT_API_KEY}`;
 
-    // Extract video IDs from <yt:videoId>xxx</yt:videoId>
-    const ids = [];
-    const regex = /<yt:videoId>([^<]+)<\/yt:videoId>/g;
-    let match;
-    while ((match = regex.exec(xml)) !== null) {
-      ids.push(match[1]);
+  try {
+    const res = await fetch(url, { timeout: 8000 });
+    const data = await res.json();
+    if (data.error) {
+      console.warn(`PlaylistItems error for ${channelId}: ${data.error.message}`);
+      return [];
     }
-    return ids.slice(0, 5); // Only check 5 most recent
+    return (data.items || []).map(item => item.contentDetails.videoId);
   } catch (e) {
-    console.warn(`RSS fetch failed for ${channelId}: ${e.message}`);
+    console.warn(`PlaylistItems fetch failed for ${channelId}: ${e.message}`);
     return [];
   }
 }
@@ -119,24 +121,41 @@ async function checkTikTokLive(ttHandle) {
     const html = await res.text();
     if (html.length < 3000) return null;
 
+    // Check live room status — status:2 = live, status:4 = offline
+    const statusMatch = html.match(/"liveRoomStatus":(\d)/);
+    const roomStatus = statusMatch ? parseInt(statusMatch[1]) : null;
+
+    // Also check if status:2 appears in room data (active stream)
+    const streamStatusMatch = html.match(/"status":2[,}]/);
+
+    // userCount > some threshold indicates real viewers (offline rooms show 0 or 1)
+    const userCountMatch = html.match(/"userCount":(\d+)/);
+    const userCount = userCountMatch ? parseInt(userCountMatch[1]) : 0;
+
+    // Determine if actually live:
+    // 1. liveRoomStatus must not be 0 or 4 (offline/ended)
+    // 2. OR status:2 is present AND userCount > 1
+    const isOffline = roomStatus === 0 || roomStatus === 4;
+    const isLive = (!isOffline && roomStatus !== null) ||
+                   (streamStatusMatch && userCount > 1);
+
+    if (!isLive) return null;
+
     // Extract room/stream ID
     const roomIdMatch = html.match(/"roomId":"(\d+)"/) || html.match(/"room_id":"(\d+)"/);
-    // Extract viewer count
-    const viewerMatch = html.match(/"viewer_count":(\d+)/) ||
-                        html.match(/"user_count":(\d+)/) ||
-                        html.match(/"liveRoomUserInfo".*?"userCount":(\d+)/);
+    // Extract viewer count (prefer userCount, fallback to others)
+    const viewers = userCount > 0 ? userCount :
+      (() => {
+        const m = html.match(/"viewer_count":(\d+)/) || html.match(/"user_count":(\d+)/);
+        return m ? parseInt(m[1]) : 0;
+      })();
     // Extract stream title
     const titleMatch = html.match(/"title":"([^"]*)"/) || html.match(/"room_title":"([^"]*)"/);
-
-    const viewers = viewerMatch ? parseInt(viewerMatch[1]) : null;
-
-    // If we can't find a room ID or viewer count, user probably isn't live
-    if (!roomIdMatch && viewers === null) return null;
 
     return {
       roomId: roomIdMatch ? roomIdMatch[1] : 'unknown',
       title: titleMatch ? titleMatch[1] : '',
-      viewers: viewers || 0,
+      viewers: viewers,
       isLive: true,
     };
   } catch (e) {
@@ -211,17 +230,18 @@ module.exports = async function handler(req, res) {
 
   try {
     // ----------------------------------------------------------
-    // STEP 1: YouTube — fetch RSS feeds in parallel
+    // STEP 1: YouTube — fetch recent videos via playlistItems API
+    // Cost: 12 units (1 per channel)
     // ----------------------------------------------------------
-    const rssResults = await Promise.all(
-      CREATORS.map(c => fetchYouTubeRSS(c.ytChannel).then(ids => ({ name: c.name, ids })))
+    const playlistResults = await Promise.all(
+      CREATORS.map(c => fetchRecentVideoIds(c.ytChannel).then(ids => ({ name: c.name, ids })))
     );
 
     // Collect all unique video IDs to check, plus any currently-active stream IDs
     const videoIdsToCheck = new Set();
     const creatorByVideoId = {};
 
-    for (const { name, ids } of rssResults) {
+    for (const { name, ids } of playlistResults) {
       for (const id of ids) {
         videoIdsToCheck.add(id);
         creatorByVideoId[id] = name;
