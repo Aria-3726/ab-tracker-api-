@@ -565,8 +565,8 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
         <div class="detail-chart" id="detailViewsChart"></div>
       </div>
       <div class="card" style="padding:20px">
-        <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">YouTube 发布视频数</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">YT频道累计视频数量趋势</div>
+        <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">每日投稿数</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">每日新增发布视频数量（投稿频次）</div>
         <div class="detail-chart" id="detailVidCountChart"></div>
       </div>
       <div class="card" style="padding:20px">
@@ -2239,30 +2239,35 @@ function renderDetailChartsInner(hist,c){
       }
     }
 
-    // Video Count
+    // Video Count — daily new uploads (delta from cumulative ytVidCount)
     const el5=document.getElementById('detailVidCountChart');
     if(el5){
       const vidHist=hist.filter(h=>h.ytVidCount!==null&&h.ytVidCount!==undefined&&h.ytVidCount>0);
       if(vidHist.length>=2){
+        // Compute daily delta
+        const vidDates=[];const vidDelta=[];
+        for(let i=1;i<vidHist.length;i++){
+          const diff=vidHist[i].ytVidCount-vidHist[i-1].ytVidCount;
+          vidDates.push(vidHist[i].d.slice(5));
+          vidDelta.push(diff>=0?diff:0);
+        }
         const ch5=echarts.init(el5,null,{renderer:'svg'});
-        const vidDates=vidHist.map(h=>h.d.slice(5));
-        const vidData=vidHist.map(h=>h.ytVidCount);
         const vidColor='#f0a830';
         ch5.setOption({
           tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
-            const idx=p[0].dataIndex;const h=vidHist[idx];
-            return `<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:2px">${h.d}</div><div style="color:${vidColor}">视频数: <b>${p[0].value}</b></div>`;
+            const idx=p[0].dataIndex;
+            return `<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:2px">${vidHist[idx+1].d}</div><div style="color:${vidColor}">新增视频: <b>${p[0].value}</b></div>`;
           }},
-          grid:{left:60,right:20,top:20,bottom:30},
+          grid:{left:50,right:20,top:20,bottom:30},
           xAxis:{type:'category',data:vidDates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45,interval:Math.max(0,Math.floor(vidDates.length/15)-1)},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
-          yAxis:{type:'value',min:'dataMin',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>v},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
-          series:[{type:'line',data:vidData,smooth:true,symbol:'circle',symbolSize:showSymbol?4:2,showSymbol:showSymbol,lineStyle:{width:2,color:vidColor},itemStyle:{color:vidColor},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(240,168,48,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}}],
+          yAxis:{type:'value',minInterval:1,axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>v},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
+          series:[{type:'bar',data:vidDelta,barMaxWidth:8,itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#f0a830'},{offset:1,color:'rgba(240,168,48,0.2)'}]),borderRadius:[2,2,0,0]},emphasis:{itemStyle:{color:'#ffc94d'}}}],
           animationDuration:800
         });
         detailCharts.push(ch5);
         window.addEventListener('resize',()=>ch5.resize());
       } else {
-        el5.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无视频数量数据（需至少2天采集数据）</div>';
+        el5.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无投稿数据（需至少2天采集数据）</div>';
       }
     }
 
