@@ -22,9 +22,9 @@ const CREATORS = [
   { name:'ZODAGA',    ytChannel:'UCyNWB280mlG9E_4gIvCu12w', ttHandle:'zodaga' },
   { name:'_MATA_',    ytChannel:'UCja-Fg06B9IGNzpxwFPJKZw', ttHandle:'srmataa_' },
   { name:'purumi',    ytChannel:'UCKGjLEfyHz-JSj9GS8OlChQ', ttHandle:'purumnnin_' },
-  { name:'GODCAT',    ytChannel:'UCIbzk4LhOrbD3xGJELOsC8Q', ttHandle:null },
+  { name:'GODCAT',    ytChannel:'UCIbzk4LhOrbD3xGJELOsC8Q', ttHandle:'godcat_2023' },
   { name:'Moszx',     ytChannel:'UCiwfSWg1QQ1g_NBPj-5Eekw', ttHandle:'moszxll' },
-  { name:'PYX',       ytChannel:'UCmzbI91mRAZTmmWN69Oxf1A', ttHandle:null },
+  { name:'PYX',       ytChannel:'UCmzbI91mRAZTmmWN69Oxf1A', ttHandle:'payosx' },
   { name:'Oca',       ytChannel:'UCZe6NZYZRH1fPHB-SojxItQ', ttHandle:'oca_dz' },
   { name:'imzogi',    ytChannel:'UCPGL26ihpdprfWGRqBbbW1w', ttHandle:'imzogi' },
 ];

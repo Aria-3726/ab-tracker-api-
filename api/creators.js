@@ -13,9 +13,9 @@ const CREATORS = [
   { name:'ZODAGA',    region:'ES', ytChannel:'UCyNWB280mlG9E_4gIvCu12w', ttHandle:'zodaga' },
   { name:'_MATA_',    region:'ES', ytChannel:'UCja-Fg06B9IGNzpxwFPJKZw', ttHandle:'srmataa_' },
   { name:'purumi',    region:'JA', ytChannel:'UCKGjLEfyHz-JSj9GS8OlChQ', ttHandle:'purumnnin_' },
-  { name:'GODCAT',    region:'TH', ytChannel:'UCIbzk4LhOrbD3xGJELOsC8Q', ttHandle:null },
+  { name:'GODCAT',    region:'TH', ytChannel:'UCIbzk4LhOrbD3xGJELOsC8Q', ttHandle:'godcat_2023' },
   { name:'Moszx',     region:'TH', ytChannel:'UCiwfSWg1QQ1g_NBPj-5Eekw', ttHandle:'moszxll' },
-  { name:'PYX',       region:'TH', ytChannel:'UCmzbI91mRAZTmmWN69Oxf1A', ttHandle:null },
+  { name:'PYX',       region:'TH', ytChannel:'UCmzbI91mRAZTmmWN69Oxf1A', ttHandle:'payosx' },
   { name:'Oca',       region:'ID', ytChannel:'UCZe6NZYZRH1fPHB-SojxItQ', ttHandle:'oca_dz' },
   { name:'imzogi',    region:'ID', ytChannel:'UCPGL26ihpdprfWGRqBbbW1w', ttHandle:'imzogi' },
 ];
