@@ -1,0 +1,31 @@
+name: Backfill Video Count
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run backfill
+        run: node scripts/backfill-vidcount.js
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/weekly-history.json data/daily-history.json
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "chore: backfill ytVidCount history"
+          git push
