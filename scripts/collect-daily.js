@@ -80,6 +80,7 @@ async function fetchTikTokData(ttHandle) {
   if (!ttHandle) return { followers: null, totalViews: null, videoCount: null };
 
   try {
+    // Fetch embed page for followerCount + playCount (views)
     const res = await fetch(`https://www.tiktok.com/embed/@${ttHandle}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -94,16 +95,27 @@ async function fetchTikTokData(ttHandle) {
     const followerMatch = html.match(/"followerCount":(\d+)/);
     const followers = followerMatch ? parseInt(followerMatch[1]) : null;
 
-    // Extract video count
-    const videoCountMatch = html.match(/"videoCount":(\d+)/);
-    const videoCount = videoCountMatch ? parseInt(videoCountMatch[1]) : null;
-
     // Extract all video playCount values from embed page
-    // The embed page contains recent videos with their play counts
     const playCountMatches = [...html.matchAll(/"playCount":(\d+)/g)];
     let totalViews = null;
     if (playCountMatches.length > 0) {
       totalViews = playCountMatches.reduce((sum, m) => sum + parseInt(m[1]), 0);
+    }
+
+    // Fetch profile page for videoCount (not available on embed page)
+    let videoCount = null;
+    try {
+      const profRes = await fetch(`https://www.tiktok.com/@${ttHandle}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        timeout: 8000,
+      });
+      const profHtml = await profRes.text();
+      const vcMatch = profHtml.match(/"videoCount":(\d+)/);
+      videoCount = vcMatch ? parseInt(vcMatch[1]) : null;
+    } catch (e2) {
+      console.warn(`  TikTok profile fetch failed for @${ttHandle}: ${e2.message}`);
     }
 
     return { followers, totalViews, videoCount };

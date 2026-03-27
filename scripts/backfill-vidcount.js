@@ -81,14 +81,14 @@ async function fetchAllVideoPublishDates(channelId) {
 async function fetchTikTokVideoCount(ttHandle) {
   if (!ttHandle) return null;
   try {
-    const res = await fetch(`https://www.tiktok.com/embed/@${ttHandle}`, {
+    const res = await fetch(`https://www.tiktok.com/@${ttHandle}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
       timeout: 8000,
     });
     const html = await res.text();
-    if (html.length < 5000) return null;
+    if (html.length < 3000) return null;
     const m = html.match(/"videoCount":(\d+)/);
     return m ? parseInt(m[1]) : null;
   } catch (e) {
