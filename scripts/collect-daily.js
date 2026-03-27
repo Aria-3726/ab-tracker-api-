@@ -66,6 +66,7 @@ async function fetchYouTubeStats() {
     map[item.id] = {
       subscriberCount: parseInt(item.statistics.subscriberCount || 0),
       viewCount: parseInt(item.statistics.viewCount || 0),
+      videoCount: parseInt(item.statistics.videoCount || 0),
     };
   });
   return map;
@@ -171,9 +172,10 @@ async function main() {
   // Append today's snapshot
   for (let i = 0; i < CREATORS.length; i++) {
     const c = CREATORS[i];
-    const channelStats = ytStats[c.ytChannel] || { subscriberCount: 0, viewCount: 0 };
+    const channelStats = ytStats[c.ytChannel] || { subscriberCount: 0, viewCount: 0, videoCount: 0 };
     const ytSubs = channelStats.subscriberCount;
     const ytTotalViews = channelStats.viewCount;
+    const ytVideos = channelStats.videoCount;
     const ttFollowers = ttResults[i].followers;
     const ttRecentViews = ttResults[i].totalViews;
 
@@ -222,6 +224,7 @@ async function main() {
       ttTotalViews: ttTotalViews,  // always store for next-day delta
       ttv: ttDailyViews,           // TikTok daily views
       wv: ytDailyViews + ttDailyViews, // total daily views
+      ytVidCount: ytVideos,        // YouTube total video count
     };
     daily[c.name].push(entry);
 

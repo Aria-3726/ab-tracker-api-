@@ -565,6 +565,11 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
         <div class="detail-chart" id="detailViewsChart"></div>
       </div>
       <div class="card" style="padding:20px">
+        <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">YouTube 发布视频数</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">YT频道累计视频数量趋势</div>
+        <div class="detail-chart" id="detailVidCountChart"></div>
+      </div>
+      <div class="card" style="padding:20px">
         <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">CPM 效率趋势</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">按月结算CPM（月费 / 当月总播放 × 1000），每月1日起算</div>
         <div class="detail-chart" id="detailCpmChart"></div>
@@ -1680,6 +1685,7 @@ function mergeHistory(weekly, daily){
       ytv:hasViews?d.ytv:(lastWeekly.ytv?Math.round(lastWeekly.ytv/7):null),
       ttv:hasTTViews?d.ttv:(hasViews?0:(lastWeekly.ttv?Math.round(lastWeekly.ttv/7):null)),
       cpm:d.cpm||lastWeekly.cpm||null,
+      ytVidCount:d.ytVidCount||null,
       estimated:!hasViews
     };
   });
@@ -2228,6 +2234,21 @@ function renderDetailChartsInner(hist,c){
         window.addEventListener('resize',()=>ch3.resize());
       } else {
         el3.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无播放量数据</div>';
+      }
+    }
+
+    // Video Count
+    const el5=document.getElementById('detailVidCountChart');
+    if(el5){
+      const vidHist=hist.filter(h=>h.ytVidCount!==null&&h.ytVidCount!==undefined&&h.ytVidCount>0);
+      if(vidHist.length>=2){
+        const ch5=echarts.init(el5,null,{renderer:'svg'});
+        const vidDates=vidHist.map(h=>h.d.slice(5));
+        ch5.setOption(lineOpt('视频数',vidHist.map(h=>h.ytVidCount),'#f0a830',v=>v,'dataMin'));
+        detailCharts.push(ch5);
+        window.addEventListener('resize',()=>ch5.resize());
+      } else {
+        el5.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无视频数量数据（需至少2天采集数据）</div>';
       }
     }
 
