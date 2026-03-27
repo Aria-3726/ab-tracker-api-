@@ -1591,7 +1591,7 @@ function refreshEvents(btn){
 // Interpolates weekly data into daily granularity for smooth charts
 function mergeHistory(weekly, daily){
   if((!daily||!daily.length)&&(!weekly||!weekly.length)) return [];
-  if(!weekly||!weekly.length) return daily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:d.wv||d.ytv||null,ytv:d.ytv||null,ttv:d.ttv||null,cpm:d.cpm||null}));
+  if(!weekly||!weekly.length) return daily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:d.wv||d.ytv||null,ytv:d.ytv||null,ttv:d.ttv||null,cpm:d.cpm||null,ytVidCount:d.ytVidCount||null}));
 
   // Helper: add days to a date string
   function addDays(dateStr,n){const d=new Date(dateStr+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().split('T')[0];}
@@ -1605,7 +1605,7 @@ function mergeHistory(weekly, daily){
   const dailyFromWeekly=[];
   for(let wi=0;wi<weekly.length;wi++){
     const cur=weekly[wi];
-    dailyFromWeekly.push({d:cur.d,yt:cur.yt,tt:cur.tt,wv:cur.wv,ytv:cur.ytv!==undefined?Math.round((cur.ytv||0)/7):null,ttv:cur.ttv!==undefined?Math.round((cur.ttv||0)/7):null,cpm:cur.cpm||null,interpolated:false});
+    dailyFromWeekly.push({d:cur.d,yt:cur.yt,tt:cur.tt,wv:cur.wv,ytv:cur.ytv!==undefined?Math.round((cur.ytv||0)/7):null,ttv:cur.ttv!==undefined?Math.round((cur.ttv||0)/7):null,cpm:cur.cpm||null,ytVidCount:cur.ytVidCount||null,interpolated:false});
     if(wi<weekly.length-1){
       const next=weekly[wi+1];
       const gap=daysBetween(cur.d,next.d);
@@ -1630,6 +1630,7 @@ function mergeHistory(weekly, daily){
             ytv:iYtv,
             ttv:iTtv,
             cpm:cur.cpm||null,
+            ytVidCount:cur.ytVidCount&&next.ytVidCount?lerp(cur.ytVidCount,next.ytVidCount,t):cur.ytVidCount||null,
             interpolated:true
           });
         }
@@ -1668,6 +1669,7 @@ function mergeHistory(weekly, daily){
           ytv:iYtv,
           ttv:iTtv,
           cpm:lastWeekly.cpm||null,
+          ytVidCount:lastWeekly.ytVidCount&&fd.ytVidCount?lerp(lastWeekly.ytVidCount,fd.ytVidCount,t):(lastWeekly.ytVidCount||fd.ytVidCount||null),
           interpolated:true
         });
       }
@@ -2244,7 +2246,19 @@ function renderDetailChartsInner(hist,c){
       if(vidHist.length>=2){
         const ch5=echarts.init(el5,null,{renderer:'svg'});
         const vidDates=vidHist.map(h=>h.d.slice(5));
-        ch5.setOption(lineOpt('视频数',vidHist.map(h=>h.ytVidCount),'#f0a830',v=>v,'dataMin'));
+        const vidData=vidHist.map(h=>h.ytVidCount);
+        const vidColor='#f0a830';
+        ch5.setOption({
+          tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
+            const idx=p[0].dataIndex;const h=vidHist[idx];
+            return `<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:2px">${h.d}</div><div style="color:${vidColor}">视频数: <b>${p[0].value}</b></div>`;
+          }},
+          grid:{left:60,right:20,top:20,bottom:30},
+          xAxis:{type:'category',data:vidDates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45,interval:Math.max(0,Math.floor(vidDates.length/15)-1)},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
+          yAxis:{type:'value',min:'dataMin',axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>v},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
+          series:[{type:'line',data:vidData,smooth:true,symbol:'circle',symbolSize:showSymbol?4:2,showSymbol:showSymbol,lineStyle:{width:2,color:vidColor},itemStyle:{color:vidColor},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(240,168,48,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}])}}],
+          animationDuration:800
+        });
         detailCharts.push(ch5);
         window.addEventListener('resize',()=>ch5.resize());
       } else {
