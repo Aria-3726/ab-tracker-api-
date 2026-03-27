@@ -566,7 +566,7 @@ body{background:#0c0c0e;color:rgba(255,255,255,0.88);font-family:'Noto Sans SC',
       </div>
       <div class="card" style="padding:20px">
         <div style="font-family:Rajdhani;font-size:15px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">每日投稿数</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">每日新增发布视频数量（投稿频次）</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">YouTube + TikTok 每日新增发布视频数量</div>
         <div class="detail-chart" id="detailVidCountChart"></div>
       </div>
       <div class="card" style="padding:20px">
@@ -1591,7 +1591,7 @@ function refreshEvents(btn){
 // Interpolates weekly data into daily granularity for smooth charts
 function mergeHistory(weekly, daily){
   if((!daily||!daily.length)&&(!weekly||!weekly.length)) return [];
-  if(!weekly||!weekly.length) return daily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:d.wv||d.ytv||null,ytv:d.ytv||null,ttv:d.ttv||null,cpm:d.cpm||null,ytVidCount:d.ytVidCount||null}));
+  if(!weekly||!weekly.length) return daily.map(d=>({d:d.d,yt:d.yt,tt:d.tt,wv:d.wv||d.ytv||null,ytv:d.ytv||null,ttv:d.ttv||null,cpm:d.cpm||null,ytVidCount:d.ytVidCount||null,ttVidCount:d.ttVidCount||null}));
 
   // Helper: add days to a date string
   function addDays(dateStr,n){const d=new Date(dateStr+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().split('T')[0];}
@@ -1605,7 +1605,7 @@ function mergeHistory(weekly, daily){
   const dailyFromWeekly=[];
   for(let wi=0;wi<weekly.length;wi++){
     const cur=weekly[wi];
-    dailyFromWeekly.push({d:cur.d,yt:cur.yt,tt:cur.tt,wv:cur.wv,ytv:cur.ytv!==undefined?Math.round((cur.ytv||0)/7):null,ttv:cur.ttv!==undefined?Math.round((cur.ttv||0)/7):null,cpm:cur.cpm||null,ytVidCount:cur.ytVidCount||null,interpolated:false});
+    dailyFromWeekly.push({d:cur.d,yt:cur.yt,tt:cur.tt,wv:cur.wv,ytv:cur.ytv!==undefined?Math.round((cur.ytv||0)/7):null,ttv:cur.ttv!==undefined?Math.round((cur.ttv||0)/7):null,cpm:cur.cpm||null,ytVidCount:cur.ytVidCount||null,ttVidCount:cur.ttVidCount||null,interpolated:false});
     if(wi<weekly.length-1){
       const next=weekly[wi+1];
       const gap=daysBetween(cur.d,next.d);
@@ -1631,6 +1631,7 @@ function mergeHistory(weekly, daily){
             ttv:iTtv,
             cpm:cur.cpm||null,
             ytVidCount:cur.ytVidCount&&next.ytVidCount?lerp(cur.ytVidCount,next.ytVidCount,t):cur.ytVidCount||null,
+            ttVidCount:cur.ttVidCount&&next.ttVidCount?lerp(cur.ttVidCount,next.ttVidCount,t):cur.ttVidCount||null,
             interpolated:true
           });
         }
@@ -1670,6 +1671,7 @@ function mergeHistory(weekly, daily){
           ttv:iTtv,
           cpm:lastWeekly.cpm||null,
           ytVidCount:lastWeekly.ytVidCount&&fd.ytVidCount?lerp(lastWeekly.ytVidCount,fd.ytVidCount,t):(lastWeekly.ytVidCount||fd.ytVidCount||null),
+          ttVidCount:lastWeekly.ttVidCount&&fd.ttVidCount?lerp(lastWeekly.ttVidCount,fd.ttVidCount,t):(lastWeekly.ttVidCount||fd.ttVidCount||null),
           interpolated:true
         });
       }
@@ -1688,6 +1690,7 @@ function mergeHistory(weekly, daily){
       ttv:hasTTViews?d.ttv:(hasViews?0:(lastWeekly.ttv?Math.round(lastWeekly.ttv/7):null)),
       cpm:d.cpm||lastWeekly.cpm||null,
       ytVidCount:d.ytVidCount||null,
+      ttVidCount:d.ttVidCount||null,
       estimated:!hasViews
     };
   });
@@ -2239,33 +2242,50 @@ function renderDetailChartsInner(hist,c){
       }
     }
 
-    // Video Count — daily new uploads (delta from cumulative ytVidCount)
+    // Video Count — daily new uploads (YT + TT stacked bar)
     const el5=document.getElementById('detailVidCountChart');
     if(el5){
-      const vidHist=hist.filter(h=>h.ytVidCount!==null&&h.ytVidCount!==undefined&&h.ytVidCount>0);
-      if(vidHist.length>=2){
-        // Compute daily delta
-        const vidDates=[];const vidDelta=[];
-        for(let i=1;i<vidHist.length;i++){
-          const diff=vidHist[i].ytVidCount-vidHist[i-1].ytVidCount;
-          vidDates.push(vidHist[i].d.slice(5));
-          vidDelta.push(diff>=0?diff:0);
+      // Build arrays with both YT and TT deltas
+      const hasYt=hist.some(h=>h.ytVidCount>0);
+      const hasTt=hist.some(h=>h.ttVidCount>0);
+      if(hasYt||hasTt){
+        const vidDates=[];const ytDelta=[];const ttDelta=[];
+        for(let i=1;i<hist.length;i++){
+          const curYt=hist[i].ytVidCount,prevYt=hist[i-1].ytVidCount;
+          const curTt=hist[i].ttVidCount,prevTt=hist[i-1].ttVidCount;
+          const yd=(curYt&&prevYt&&curYt>=prevYt)?curYt-prevYt:0;
+          const td=(curTt&&prevTt&&curTt>=prevTt)?curTt-prevTt:0;
+          vidDates.push(hist[i].d.slice(5));
+          ytDelta.push(yd);
+          ttDelta.push(td);
         }
-        const ch5=echarts.init(el5,null,{renderer:'svg'});
-        const vidColor='#f0a830';
-        ch5.setOption({
-          tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
-            const idx=p[0].dataIndex;
-            return `<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:2px">${vidHist[idx+1].d}</div><div style="color:${vidColor}">新增视频: <b>${p[0].value}</b></div>`;
-          }},
-          grid:{left:50,right:20,top:20,bottom:30},
-          xAxis:{type:'category',data:vidDates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45,interval:Math.max(0,Math.floor(vidDates.length/15)-1)},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
-          yAxis:{type:'value',minInterval:1,axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>v},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
-          series:[{type:'bar',data:vidDelta,barMaxWidth:8,itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#f0a830'},{offset:1,color:'rgba(240,168,48,0.2)'}]),borderRadius:[2,2,0,0]},emphasis:{itemStyle:{color:'#ffc94d'}}}],
-          animationDuration:800
-        });
-        detailCharts.push(ch5);
-        window.addEventListener('resize',()=>ch5.resize());
+        // Only render if there's at least some data
+        if(vidDates.length>=2){
+          const ch5=echarts.init(el5,null,{renderer:'svg'});
+          ch5.setOption({
+            tooltip:{...ttStyle(),trigger:'axis',formatter:p=>{
+              const idx=p[0].dataIndex;
+              let html=`<div style="font-family:Rajdhani;font-size:13px;color:#c8a44e;margin-bottom:4px">${hist[idx+1].d}</div>`;
+              let total=0;
+              p.forEach(s=>{if(s.value>0){html+=`<div style="color:${s.color}">${s.seriesName}: <b>${s.value}</b></div>`;total+=s.value;}});
+              if(total>0) html+=`<div style="color:rgba(255,255,255,0.5);margin-top:2px;border-top:1px solid rgba(255,255,255,0.1);padding-top:2px">合计: <b>${total}</b></div>`;
+              return html;
+            }},
+            legend:{show:hasTt&&hasYt,top:0,right:0,textStyle:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.4)'},itemWidth:12,itemHeight:8},
+            grid:{left:50,right:20,top:hasTt&&hasYt?28:20,bottom:30},
+            xAxis:{type:'category',data:vidDates,axisLabel:{fontFamily:cFont,fontSize:9,color:'rgba(255,255,255,0.25)',rotate:45,interval:Math.max(0,Math.floor(vidDates.length/15)-1)},axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},axisTick:{show:false}},
+            yAxis:{type:'value',minInterval:1,axisLabel:{fontFamily:cFont,fontSize:10,color:'rgba(255,255,255,0.25)',formatter:v=>v},splitLine:{lineStyle:{color:'rgba(255,255,255,0.03)'}},axisLine:{show:false}},
+            series:[
+              {name:'YouTube',type:'bar',stack:'vid',data:ytDelta,barMaxWidth:8,itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#ff4444'},{offset:1,color:'rgba(255,68,68,0.2)'}]),borderRadius:[0,0,0,0]},emphasis:{itemStyle:{color:'#ff6666'}}},
+              {name:'TikTok',type:'bar',stack:'vid',data:ttDelta,barMaxWidth:8,itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#00f2ea'},{offset:1,color:'rgba(0,242,234,0.2)'}]),borderRadius:[2,2,0,0]},emphasis:{itemStyle:{color:'#33fff8'}}}
+            ],
+            animationDuration:800
+          });
+          detailCharts.push(ch5);
+          window.addEventListener('resize',()=>ch5.resize());
+        } else {
+          el5.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无投稿数据（需至少2天采集数据）</div>';
+        }
       } else {
         el5.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.25);font-size:13px">暂无投稿数据（需至少2天采集数据）</div>';
       }

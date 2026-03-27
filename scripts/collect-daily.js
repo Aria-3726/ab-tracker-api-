@@ -77,7 +77,7 @@ async function fetchYouTubeStats() {
 // Returns { followers, totalViews } or { followers: null, totalViews: null }
 // ============================================================
 async function fetchTikTokData(ttHandle) {
-  if (!ttHandle) return { followers: null, totalViews: null };
+  if (!ttHandle) return { followers: null, totalViews: null, videoCount: null };
 
   try {
     const res = await fetch(`https://www.tiktok.com/embed/@${ttHandle}`, {
@@ -88,11 +88,15 @@ async function fetchTikTokData(ttHandle) {
     });
 
     const html = await res.text();
-    if (html.length < 5000) return { followers: null, totalViews: null };
+    if (html.length < 5000) return { followers: null, totalViews: null, videoCount: null };
 
     // Extract follower count
     const followerMatch = html.match(/"followerCount":(\d+)/);
     const followers = followerMatch ? parseInt(followerMatch[1]) : null;
+
+    // Extract video count
+    const videoCountMatch = html.match(/"videoCount":(\d+)/);
+    const videoCount = videoCountMatch ? parseInt(videoCountMatch[1]) : null;
 
     // Extract all video playCount values from embed page
     // The embed page contains recent videos with their play counts
@@ -102,10 +106,10 @@ async function fetchTikTokData(ttHandle) {
       totalViews = playCountMatches.reduce((sum, m) => sum + parseInt(m[1]), 0);
     }
 
-    return { followers, totalViews };
+    return { followers, totalViews, videoCount };
   } catch (e) {
     console.warn(`  TikTok fetch failed for @${ttHandle}: ${e.message}`);
-    return { followers: null, totalViews: null };
+    return { followers: null, totalViews: null, videoCount: null };
   }
 }
 
@@ -178,6 +182,7 @@ async function main() {
     const ytVideos = channelStats.videoCount;
     const ttFollowers = ttResults[i].followers;
     const ttRecentViews = ttResults[i].totalViews;
+    const ttVideos = ttResults[i].videoCount;
 
     if (!daily[c.name]) daily[c.name] = [];
 
@@ -225,6 +230,7 @@ async function main() {
       ttv: ttDailyViews,           // TikTok daily views
       wv: ytDailyViews + ttDailyViews, // total daily views
       ytVidCount: ytVideos,        // YouTube total video count
+      ttVidCount: ttVideos,        // TikTok total video count
     };
     daily[c.name].push(entry);
 
